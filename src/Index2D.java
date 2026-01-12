@@ -12,11 +12,9 @@ public class Index2D implements Pixel2D {
         return _y;
     }
     public double distance2D(Pixel2D t) {
-        double ans = 0;
-        /////// add your code below ///////
-
-        ///////////////////////////////////
-        return ans;
+        double xDiff = Math.pow(this._x - t.getX(), 2);
+        double yDiff = Math.pow(this._y - t.getY(), 2);
+        return Math.sqrt(xDiff+yDiff);
     }
     @Override
     public String toString() {
