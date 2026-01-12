@@ -12,8 +12,7 @@ import java.util.List;
  * Uses BFS for distance calculations and simple heuristics for movement.
  */
 public class Ex3Algo implements PacManAlgo {
-	private int _count;
-	
+
 	// FSM States
 	private enum State {
 		CHASE,      // Eat vulnerable ghosts
@@ -25,9 +24,9 @@ public class Ex3Algo implements PacManAlgo {
 	// Constants
 	private static final int DANGER_THRESHOLD = 3;  // Distance threshold for immediate danger
 	private static final int CHASE_THRESHOLD = 2;  // Max distance to chase vulnerable ghosts
+	private static final int OBSTACLE_COLOR = Game.getIntColor(Color.BLUE, 0);
 	
 	public Ex3Algo() {
-		_count = 0;
 	}
 	
 	@Override
@@ -37,141 +36,34 @@ public class Ex3Algo implements PacManAlgo {
 	
 	@Override
 	public int move(PacmanGame game) {
-			int code = 0;
-			int[][] board = game.getGame(0);
-		Pixel2D pacmanPos = parsePosition(game.getPos(code).toString());
+		int code = 0;
+		int[][] board = game.getGame(0);
+		Pixel2D pacmanPos = parsePosition(game.getPos(code));
 		GhostCL[] ghosts = game.getGhosts(code);
 		
 		// Get color codes
 		int blue = Game.getIntColor(Color.BLUE, code);
 		int pink = Game.getIntColor(Color.PINK, code);
-		int black = Game.getIntColor(Color.BLACK, code);
-		int green = Game.getIntColor(Color.GREEN, code);
 
-		// Create map - need to handle coordinate system
-		// Board is board[x][y] where x=width, y=height
-		// Map stores as _map[y][x] and getPixel(x,y) returns _map[y][x]
-		// So we need: _map[y][x] = board[x][y], which means we transpose
-		int width = board.length;
-		int height = board[0].length;
-		int[][] transposedBoard = new int[height][width];
-		for (int x = 0; x < width; x++) {
-			for (int y = 0; y < height; y++) {
-				transposedBoard[y][x] = board[x][y];
-			}
-		}
-		Map map = new Map(transposedBoard);
-		map.setCyclic(GameInfo.CYCLIC_MODE);
-		
-		int obstacleColor = blue;
+		Map map = CreateMap(board);
 
 		// Determine state
-		State currentState = determineState(pacmanPos, ghosts, map, obstacleColor, pink);
-
-		// When safe (no ghosts nearby), prioritize power pellets if they exist and are close
-		// BUT only if there are ghosts that are NOT vulnerable, or will become not vulnerable soon
-		if (currentState == State.EAT_DOTS) {
-			// Check if there are non-vulnerable ghosts, or vulnerable ghosts that will become non-vulnerable soon
-			boolean shouldGetPowerPellet = false;
-			
-			for (GhostCL ghost : ghosts) {
-				double remainTime = ghost.remainTimeAsEatable(0);
-				// If ghost is NOT vulnerable (remainTime <= 0), we should get power pellet
-				if (remainTime <= 0) {
-					shouldGetPowerPellet = true;
-					break;
-				}
-				// If ghost is vulnerable but will become not vulnerable soon (remainTime < 10)
-				// We should get power pellet to make them vulnerable again
-				if (remainTime > 0 && remainTime < 10) {
-					shouldGetPowerPellet = true;
-					break;
-				}
-			}
-			
-			// Only go for power pellets if there are non-vulnerable ghosts or ghosts becoming non-vulnerable soon
-			if (shouldGetPowerPellet) {
-				Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
-				Pixel2D closestPellet = null;
-				int closestPelletDist = Integer.MAX_VALUE;
-				
-				// Check for nearby power pellets (within reasonable distance)
-				for (int x = 0; x < map.getWidth(); x++) {
-					for (int y = 0; y < map.getHeight(); y++) {
-						if (map.getPixel(x, y) == pink) {
-							Pixel2D pelletPos = new Index2D(x, y);
-							int distance = pacmanDistances.getPixel(pelletPos);
-							if (distance != -1 && distance > 0 && distance < closestPelletDist) {
-								closestPelletDist = distance;
-								closestPellet = pelletPos;
-							}
-						}
-					}
-				}
-
-				// Yael TODO: Maybe return this (and maybe return and change)
-//				// If there's a power pellet within reasonable distance (e.g., 15 steps), prioritize it
-//				if (closestPellet != null && closestPelletDist <= 15) {
-//					currentState = State.GET_POWER_PELLET;
-//				}
-			}
-		}
-		
-		// Execute state behavior
-		int direction = executeState(currentState, pacmanPos, ghosts, map, obstacleColor, blue, pink);
-		
-		// Debug: log state occasionally
-		if (_count % 1 == 0) {
-			System.out.println("Move " + _count + ": State=" + currentState + ", direction=" + direction + ", Pos=" + pacmanPos);
-		}
-		
-		// CRITICAL: Always verify direction is valid, if not get a valid one
-		Pixel2D nextPos = getNextPosition(pacmanPos, direction, map);
-		if (!isValidPosition(nextPos, map, obstacleColor)) {
-			// Get any valid direction
-			List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
-			if (!validNeighbors.isEmpty()) {
-				direction = getDirection(pacmanPos, validNeighbors.get(0));
-				nextPos = getNextPosition(pacmanPos, direction, map);
-			} else {
-				// Last resort: try each direction
-				int[] dirs = {Game.UP, Game.LEFT, Game.DOWN, Game.RIGHT};
-				for (int dir : dirs) {
-					nextPos = getNextPosition(pacmanPos, dir, map);
-					if (isValidPosition(nextPos, map, obstacleColor)) {
-						direction = dir;
-						break;
-					}
-				}
-			}
-		}
-		
-		// Final verification: ensure next position is actually valid
-		nextPos = getNextPosition(pacmanPos, direction, map);
-		if (!isValidPosition(nextPos, map, obstacleColor)) {
-			// Absolute fallback - this should never happen, but handle it
-			List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
-			if (!validNeighbors.isEmpty()) {
-				direction = getDirection(pacmanPos, validNeighbors.get(0));
-			}
-		}
-		
-		_count++;
-		return direction;
+		State currentState = determineState(pacmanPos, ghosts, map, OBSTACLE_COLOR, pink);
+		return executeState(currentState, pacmanPos, ghosts, map, OBSTACLE_COLOR, blue, pink);
 	}
 	
 	/**
 	 * Determines the current state based on game situation.
 	 */
 	private State determineState(Pixel2D pacmanPos, GhostCL[] ghosts, Map map, int obstacleColor, int pink) {
-		// Check for vulnerable ghosts (highest priority)
+		// Check for vulnerable ghosts
 		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
 		// Yael TODO: Does this is make sense?
 		for (GhostCL ghost : ghosts) {
 			if (isVulnerable(ghost)) {
 				Pixel2D ghostPos = getGhostPosition(ghost);
 				int dist = pacmanDistances.getPixel(ghostPos);
-				if (dist != -1 && dist <= CHASE_THRESHOLD && dist > 0) {
+				if (dist <= CHASE_THRESHOLD && dist > 0) {
 					return State.CHASE;
 				}
 			}
@@ -196,7 +88,6 @@ public class Ex3Algo implements PacManAlgo {
 				int dist = pacmanDistances.getPixel(ghostPos);
 				if (dist != -1 && dist <= DANGER_THRESHOLD + 3 && dist > 0) {
 					dangerNear = true;
-					System.out.println("asdddddddddddddddddddddddddddddddddd");
 					break;
 				}
 			}
@@ -939,5 +830,25 @@ public class Ex3Algo implements PacManAlgo {
 		if (y2 >= map.getHeight()) y2 = y2 - map.getHeight();
 		
 		return x1 == x2 && y1 == y2;
+	}
+
+	private Map CreateMap(int [][] board) {
+		// Create map - need to handle coordinate system
+		// Board is board[x][y] where x=width, y=height
+		// Map stores as _map[y][x] and getPixel(x,y) returns _map[y][x]
+		// So we need: _map[y][x] = board[x][y], which means we transpose
+		int width = board.length;
+		int height = board[0].length;
+		int[][] transposedBoard = new int[height][width];
+		for (int x = 0; x < width; x++) {
+			for (int y = 0; y < height; y++) {
+				transposedBoard[y][x] = board[x][y];
+			}
+		}
+
+		Map map = new Map(transposedBoard);
+		map.setCyclic(GameInfo.CYCLIC_MODE);
+
+		return map;
 	}
 }
