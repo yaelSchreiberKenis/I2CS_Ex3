@@ -63,9 +63,8 @@ public class Ex3Algo implements PacManAlgo {
 		Map map = new Map(transposedBoard);
 		map.setCyclic(GameInfo.CYCLIC_MODE);
 		
-		// Find obstacle color by checking what's around pacman
-		int obstacleColor = findObstacleColor(pacmanPos, map, green, black, blue);
-		
+		int obstacleColor = blue;
+
 		// Determine state
 		State currentState = determineState(pacmanPos, ghosts, map, obstacleColor);
 		
@@ -94,44 +93,6 @@ public class Ex3Algo implements PacManAlgo {
 		
 		_count++;
 		return direction;
-	}
-	
-	/**
-	 * Finds the obstacle color by checking neighbors around pacman.
-	 */
-	private int findObstacleColor(Pixel2D pacmanPos, Map map, int green, int black, int blue) {
-		int pacmanCell = map.getPixel(pacmanPos);
-		
-		// Check all neighbors
-		int[] dx = {0, -1, 0, 1};
-		int[] dy = {1, 0, -1, 0};
-		
-		for (int i = 0; i < 4; i++) {
-			int x = pacmanPos.getX() + dx[i];
-			int y = pacmanPos.getY() + dy[i];
-			
-			// Handle cyclic
-			if (map.isCyclic()) {
-				if (x < 0) x = map.getWidth() - 1;
-				else if (x >= map.getWidth()) x = 0;
-				if (y < 0) y = map.getHeight() - 1;
-				else if (y >= map.getHeight()) y = 0;
-			} else {
-				if (x < 0 || x >= map.getWidth() || y < 0 || y >= map.getHeight()) continue;
-			}
-			
-			int cellValue = map.getPixel(x, y);
-			if (cellValue == -1) continue;
-			
-			// If this cell is different from pacman's cell and is green or black, it might be a wall
-			if (cellValue != pacmanCell) {
-				if (cellValue == green) return green;
-				if (cellValue == black && pacmanCell != black) return black;
-			}
-		}
-		
-		// Default to green
-		return green;
 	}
 	
 	/**
@@ -299,25 +260,39 @@ public class Ex3Algo implements PacManAlgo {
 	 * EAT_DOTS state: Find and move towards the closest dot.
 	 */
 	private int eatDots(Pixel2D pacmanPos, Map map, int obstacleColor, int blue) {
-		// First check immediate neighbors
+		// First check immediate neighbors - prioritize dots
 		List<Pixel2D> neighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
 		
-		// Prefer neighbors with dots (blue)
+		if (neighbors.isEmpty()) {
+			return Game.UP;  // Shouldn't happen, but safety
+		}
+		
+		// Prefer neighbors with dots (blue), but also accept any valid neighbor
+		Pixel2D bestNeighbor = null;
+		boolean foundDot = false;
+		
 		for (Pixel2D neighbor : neighbors) {
 			int cellValue = map.getPixel(neighbor);
 			if (cellValue == blue) {
+				// Found a dot in neighbor - go there immediately
 				return getDirection(pacmanPos, neighbor);
+			}
+			// Keep track of first valid neighbor as fallback
+			if (bestNeighbor == null) {
+				bestNeighbor = neighbor;
 			}
 		}
 		
-		// If no dot in neighbors, find closest dot
+		// If no dot in immediate neighbors, find closest dot using BFS
 		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
 		Pixel2D bestDot = null;
 		int bestDist = Integer.MAX_VALUE;
 		
+		// Search for dots (blue cells) or any non-obstacle, non-empty cell
 		for (int x = 0; x < map.getWidth(); x++) {
 			for (int y = 0; y < map.getHeight(); y++) {
 				int cellValue = map.getPixel(x, y);
+				// Look for blue (dots) or any non-obstacle cell
 				if (cellValue == blue || (cellValue != obstacleColor && cellValue != -1)) {
 					Pixel2D dotPos = new Index2D(x, y);
 					int distance = pacmanDistances.getPixel(dotPos);
@@ -330,16 +305,17 @@ public class Ex3Algo implements PacManAlgo {
 		}
 		
 		if (bestDot != null) {
+			// Move towards the closest dot
 			return moveTowardsTarget(pacmanPos, bestDot, map, obstacleColor);
 		}
 		
-		// Fallback: move to any valid neighbor
-		if (!neighbors.isEmpty()) {
-			return getDirection(pacmanPos, neighbors.get(0));
+		// No dots found - move to any valid neighbor to explore
+		if (bestNeighbor != null) {
+			return getDirection(pacmanPos, bestNeighbor);
 		}
 		
-		// Last resort
-		return Game.UP;
+		// Last resort: return first neighbor
+		return getDirection(pacmanPos, neighbors.get(0));
 	}
 	
 	/**
@@ -350,19 +326,31 @@ public class Ex3Algo implements PacManAlgo {
 			return eatDots(from, map, obstacleColor, 0);
 		}
 		
-		// If adjacent, go directly
+		// Calculate distance with cyclic wrapping support
 		int dx = to.getX() - from.getX();
 		int dy = to.getY() - from.getY();
 		
+		// Handle cyclic wrapping for direction calculation
+		if (map.isCyclic()) {
+			// Check if wrapping would give a shorter path
+			if (Math.abs(dx) > map.getWidth() / 2) {
+				dx = dx > 0 ? dx - map.getWidth() : dx + map.getWidth();
+			}
+			if (Math.abs(dy) > map.getHeight() / 2) {
+				dy = dy > 0 ? dy - map.getHeight() : dy + map.getHeight();
+			}
+		}
+		
+		// If adjacent (after wrapping), go directly
 		if (Math.abs(dx) + Math.abs(dy) == 1) {
-			int dir = getDirection(from, to);
+			int dir = getDirectionWithWrapping(from, to, dx, dy);
 			Pixel2D nextPos = getNextPosition(from, dir, map);
 			if (isValidPosition(nextPos, map, obstacleColor)) {
 				return dir;
 			}
 		}
 		
-		// Use pathfinding
+		// Use pathfinding (handles cyclic automatically)
 		Pixel2D[] path = map.shortestPath(from, to, obstacleColor);
 		if (path != null && path.length > 1) {
 			Pixel2D nextStep = path[1];
@@ -373,7 +361,7 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		}
 		
-		// Fallback: move in general direction
+		// Fallback: move in general direction (with cyclic support)
 		if (Math.abs(dx) > Math.abs(dy)) {
 			int dir = dx > 0 ? Game.RIGHT : Game.LEFT;
 			Pixel2D nextPos = getNextPosition(from, dir, map);
@@ -390,6 +378,20 @@ public class Ex3Algo implements PacManAlgo {
 		
 		// Final fallback
 		return eatDots(from, map, obstacleColor, 0);
+	}
+	
+	/**
+	 * Gets direction considering cyclic wrapping.
+	 */
+	private int getDirectionWithWrapping(Pixel2D from, Pixel2D to, int dx, int dy) {
+		// For adjacent cells, use the wrapped dx/dy
+		if (dx == 1 || (dx < 0 && Math.abs(dx) > 1)) return Game.RIGHT;
+		if (dx == -1 || (dx > 0 && Math.abs(dx) > 1)) return Game.LEFT;
+		if (dy == 1 || (dy < 0 && Math.abs(dy) > 1)) return Game.UP;
+		if (dy == -1 || (dy > 0 && Math.abs(dy) > 1)) return Game.DOWN;
+		
+		// Fallback to regular direction
+		return getDirection(from, to);
 	}
 	
 	/**
@@ -479,9 +481,24 @@ public class Ex3Algo implements PacManAlgo {
 	 * Checks if a position is valid.
 	 */
 	private boolean isValidPosition(Pixel2D pos, Map map, int obstacleColor) {
-		if (!map.isInside(pos) && !map.isCyclic()) {
+		// In cyclic mode, all positions are valid (they wrap)
+		// In non-cyclic mode, check bounds
+		if (!map.isCyclic() && !map.isInside(pos)) {
 			return false;
 		}
+		
+		// Handle cyclic wrapping for bounds check
+		int x = pos.getX();
+		int y = pos.getY();
+		if (map.isCyclic()) {
+			// Wrap coordinates
+			if (x < 0) x = map.getWidth() - 1;
+			else if (x >= map.getWidth()) x = 0;
+			if (y < 0) y = map.getHeight() - 1;
+			else if (y >= map.getHeight()) y = 0;
+			pos = new Index2D(x, y);
+		}
+		
 		int cellValue = map.getPixel(pos);
 		return cellValue != -1 && cellValue != obstacleColor;
 	}
