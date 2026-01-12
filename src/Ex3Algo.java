@@ -24,7 +24,7 @@ public class Ex3Algo implements PacManAlgo {
 	
 	// Constants
 	private static final int DANGER_THRESHOLD = 3;  // Distance threshold for immediate danger
-	private static final int CHASE_THRESHOLD = 10;  // Max distance to chase vulnerable ghosts
+	private static final int CHASE_THRESHOLD = 2;  // Max distance to chase vulnerable ghosts
 	
 	public Ex3Algo() {
 		_count = 0;
@@ -37,16 +37,16 @@ public class Ex3Algo implements PacManAlgo {
 	
 	@Override
 	public int move(PacmanGame game) {
-		int code = 0;
-		int[][] board = game.getGame(0);
+			int code = 0;
+			int[][] board = game.getGame(0);
 		Pixel2D pacmanPos = parsePosition(game.getPos(code).toString());
 		GhostCL[] ghosts = game.getGhosts(code);
 		
 		// Get color codes
-		int blue = Game.getIntColor(Color.BLUE, code);
-		int pink = Game.getIntColor(Color.PINK, code);
-		int black = Game.getIntColor(Color.BLACK, code);
-		int green = Game.getIntColor(Color.GREEN, code);
+			int blue = Game.getIntColor(Color.BLUE, code);
+			int pink = Game.getIntColor(Color.PINK, code);
+			int black = Game.getIntColor(Color.BLACK, code);
+			int green = Game.getIntColor(Color.GREEN, code);
 		
 		// Create map - need to handle coordinate system
 		// Board is board[x][y] where x=width, y=height
@@ -68,19 +68,28 @@ public class Ex3Algo implements PacManAlgo {
 		// Determine state
 		State currentState = determineState(pacmanPos, ghosts, map, obstacleColor, pink);
 		
-		// When safe (no ghosts nearby), prioritize power pellets if they exist
+		// When safe (no ghosts nearby), prioritize power pellets if they exist and are close
 		if (currentState == State.EAT_DOTS) {
-			boolean hasPowerPellets = false;
+			Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
+			Pixel2D closestPellet = null;
+			int closestPelletDist = Integer.MAX_VALUE;
+			
+			// Check for nearby power pellets (within reasonable distance)
 			for (int x = 0; x < map.getWidth(); x++) {
 				for (int y = 0; y < map.getHeight(); y++) {
 					if (map.getPixel(x, y) == pink) {
-						hasPowerPellets = true;
-						break;
+						Pixel2D pelletPos = new Index2D(x, y);
+						int distance = pacmanDistances.getPixel(pelletPos);
+						if (distance != -1 && distance > 0 && distance < closestPelletDist) {
+							closestPelletDist = distance;
+							closestPellet = pelletPos;
+						}
 					}
 				}
-				if (hasPowerPellets) break;
 			}
-			if (hasPowerPellets) {
+			
+			// If there's a power pellet within reasonable distance (e.g., 15 steps), prioritize it
+			if (closestPellet != null && closestPelletDist <= 15) {
 				currentState = State.GET_POWER_PELLET;
 			}
 		}
@@ -379,6 +388,17 @@ public class Ex3Algo implements PacManAlgo {
 	 * Prioritized when safe (no ghosts nearby).
 	 */
 	private int getPowerPellet(Pixel2D pacmanPos, Map map, int obstacleColor, int pink) {
+		// First check immediate neighbors - if power pellet is adjacent, go there!
+		List<Pixel2D> neighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
+		for (Pixel2D neighbor : neighbors) {
+			int cellValue = map.getPixel(neighbor);
+			if (cellValue == pink) {
+				// Power pellet right next to us - grab it!
+				return getDirection(pacmanPos, neighbor);
+			}
+		}
+		
+		// Find closest power pellet
 		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
 		Pixel2D bestPellet = null;
 		int bestDist = Integer.MAX_VALUE;
@@ -415,18 +435,30 @@ public class Ex3Algo implements PacManAlgo {
 	/**
 	 * EAT_DOTS state: Find and move towards the closest dot.
 	 * Properly handles cyclic movement.
+	 * Also checks for nearby power pellets (pink) and prioritizes them.
 	 */
 	private int eatDots(Pixel2D pacmanPos, Map map, int obstacleColor, int blue) {
-		// First check immediate neighbors - prioritize dots
+		// First check immediate neighbors - prioritize power pellets (pink), then dots (blue)
 		List<Pixel2D> neighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
 		
 		if (neighbors.isEmpty()) {
 			return Game.UP;  // Shouldn't happen, but safety
 		}
 		
-		// Prefer neighbors with dots (blue), but also accept any valid neighbor
-		Pixel2D bestNeighbor = null;
+		// Get pink color for power pellets
+		int pink = Game.getIntColor(Color.PINK, 0);
 		
+		// First priority: power pellets in immediate neighbors
+		for (Pixel2D neighbor : neighbors) {
+			int cellValue = map.getPixel(neighbor);
+			if (cellValue == pink) {
+				// Found a power pellet in neighbor - go there immediately!
+				return getDirection(pacmanPos, neighbor);
+			}
+		}
+		
+		// Second priority: dots (blue) in immediate neighbors
+		Pixel2D bestNeighbor = null;
 		for (Pixel2D neighbor : neighbors) {
 			int cellValue = map.getPixel(neighbor);
 			if (cellValue == blue) {
@@ -439,9 +471,37 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		}
 		
-		// If no dot in immediate neighbors, find closest dot using BFS
-		// This will properly handle cyclic mode
+		// Check for nearby power pellets (within a few steps) - prioritize them over distant dots
 		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
+		Pixel2D closestPellet = null;
+		int closestPelletDist = Integer.MAX_VALUE;
+		
+		for (int x = 0; x < map.getWidth(); x++) {
+			for (int y = 0; y < map.getHeight(); y++) {
+				if (map.getPixel(x, y) == pink) {
+					Pixel2D pelletPos = new Index2D(x, y);
+					int distance = pacmanDistances.getPixel(pelletPos);
+					if (distance != -1 && distance > 0 && distance < closestPelletDist) {
+						closestPelletDist = distance;
+						closestPellet = pelletPos;
+					}
+				}
+			}
+		}
+		
+		// If there's a power pellet nearby (within 10 steps), go for it
+		if (closestPellet != null && closestPelletDist <= 10) {
+			int dir = moveTowardsTarget(pacmanPos, closestPellet, map, obstacleColor);
+			Pixel2D nextPos = getNextPosition(pacmanPos, dir, map);
+			if (isValidPosition(nextPos, map, obstacleColor)) {
+				return dir;
+			}
+			// Fallback to direct direction
+			return getDirectionToTarget(pacmanPos, closestPellet, map);
+		}
+		
+		// If no dot in immediate neighbors, find closest dot using BFS
+		// This will properly handle cyclic mode (reuse pacmanDistances already calculated)
 		Pixel2D bestDot = null;
 		int bestDist = Integer.MAX_VALUE;
 		
