@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="14703d92-7567-40b3-b658-ae89a3d5f4f6" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/libraries/Ex3_v09e_jar_out.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/I2CS_Ex3.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/g0.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/g1.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/g2.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/g3.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/libs/Ex3_v09e.jar-out.jar" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/p1.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/Ex3Algo.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/Ex3Main.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/GameInfo.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/Index2D.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/ManualAlgo.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/Map.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/Map2D.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/Pixel2D.java" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/test.bit" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MacroExpansionManager">
+    <option name="directoryName" value="hx6zd17o" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectId" id="38AA6AMlTL0s1jwvQIHlJzdMqgL" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "last_opened_file_path": "C:/Users/ilank/Documents/I2CS_Ex3"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\ilank\Documents\I2CS_Ex3" />
+      <recent name="C:\Users\ilank\Documents\I2CS_Ex3\src" />
+    </key>
+  </component>
+  <component name="RunManager">
+    <configuration name="Ex3Main" type="Application" factoryName="Application" temporary="true" nameIsGenerated="true">
+      <option name="MAIN_CLASS_NAME" value="Ex3Main" />
+      <module name="I2CS_Ex3" />
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Application.Ex3Main" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="14703d92-7567-40b3-b658-ae89a3d5f4f6" name="Changes" comment="" />
+      <created>1768231826825</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1768231826825</updated>
+    </task>
+    <servers />
+  </component>
+</project>
