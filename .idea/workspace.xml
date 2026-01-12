@@ -6,7 +6,8 @@
   <component name="ChangeListManager">
     <list default="true" id="14703d92-7567-40b3-b658-ae89a3d5f4f6" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/Map.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/Map.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/Ex3Algo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/Ex3Algo.java" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/GameInfo.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/GameInfo.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -66,5 +67,21 @@
       <updated>1768231826825</updated>
     </task>
     <servers />
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/Ex3Algo.java</url>
+          <line>584</line>
+          <option name="timeStamp" value="12" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="java-line">
+          <url>file://$PROJECT_DIR$/src/Ex3Algo.java</url>
+          <line>479</line>
+          <option name="timeStamp" value="13" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
   </component>
 </project>

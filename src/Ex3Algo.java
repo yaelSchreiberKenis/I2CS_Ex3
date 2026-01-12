@@ -43,11 +43,11 @@ public class Ex3Algo implements PacManAlgo {
 		GhostCL[] ghosts = game.getGhosts(code);
 		
 		// Get color codes
-			int blue = Game.getIntColor(Color.BLUE, code);
-			int pink = Game.getIntColor(Color.PINK, code);
-			int black = Game.getIntColor(Color.BLACK, code);
-			int green = Game.getIntColor(Color.GREEN, code);
-		
+		int blue = Game.getIntColor(Color.BLUE, code);
+		int pink = Game.getIntColor(Color.PINK, code);
+		int black = Game.getIntColor(Color.BLACK, code);
+		int green = Game.getIntColor(Color.GREEN, code);
+
 		// Create map - need to handle coordinate system
 		// Board is board[x][y] where x=width, y=height
 		// Map stores as _map[y][x] and getPixel(x,y) returns _map[y][x]
@@ -67,7 +67,7 @@ public class Ex3Algo implements PacManAlgo {
 
 		// Determine state
 		State currentState = determineState(pacmanPos, ghosts, map, obstacleColor, pink);
-		
+
 		// When safe (no ghosts nearby), prioritize power pellets if they exist and are close
 		// BUT only if there are ghosts that are NOT vulnerable, or will become not vulnerable soon
 		if (currentState == State.EAT_DOTS) {
@@ -108,11 +108,12 @@ public class Ex3Algo implements PacManAlgo {
 						}
 					}
 				}
-				
-				// If there's a power pellet within reasonable distance (e.g., 15 steps), prioritize it
-				if (closestPellet != null && closestPelletDist <= 15) {
-					currentState = State.GET_POWER_PELLET;
-				}
+
+				// Yael TODO: Maybe return this (and maybe return and change)
+//				// If there's a power pellet within reasonable distance (e.g., 15 steps), prioritize it
+//				if (closestPellet != null && closestPelletDist <= 15) {
+//					currentState = State.GET_POWER_PELLET;
+//				}
 			}
 		}
 		
@@ -126,8 +127,8 @@ public class Ex3Algo implements PacManAlgo {
 		int direction = executeState(currentState, pacmanPos, ghosts, map, obstacleColor, blue, pink);
 		
 		// Debug: log state occasionally
-		if (_count % 100 == 0) {
-			System.out.println("Move " + _count + ": State=" + currentState + ", Pos=" + pacmanPos);
+		if (_count % 1 == 0) {
+			System.out.println("Move " + _count + ": State=" + currentState + ", direction=" + direction + ", Pos=" + pacmanPos);
 		}
 		
 		// CRITICAL: Always verify direction is valid, if not get a valid one
@@ -171,6 +172,7 @@ public class Ex3Algo implements PacManAlgo {
 	private State determineState(Pixel2D pacmanPos, GhostCL[] ghosts, Map map, int obstacleColor, int pink) {
 		// Check for vulnerable ghosts (highest priority)
 		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
+		// Yael TODO: Does this is make sense?
 		for (GhostCL ghost : ghosts) {
 			if (isVulnerable(ghost)) {
 				Pixel2D ghostPos = getGhostPosition(ghost);
@@ -186,7 +188,7 @@ public class Ex3Algo implements PacManAlgo {
 			if (!isVulnerable(ghost)) {
 				Pixel2D ghostPos = getGhostPosition(ghost);
 				int dist = pacmanDistances.getPixel(ghostPos);
-				if (dist != -1 && dist <= DANGER_THRESHOLD && dist > 0) {
+				if (dist <= DANGER_THRESHOLD && dist > 0) {
 					return State.ESCAPE;
 				}
 			}
@@ -200,6 +202,7 @@ public class Ex3Algo implements PacManAlgo {
 				int dist = pacmanDistances.getPixel(ghostPos);
 				if (dist != -1 && dist <= DANGER_THRESHOLD + 3 && dist > 0) {
 					dangerNear = true;
+					System.out.println("asdddddddddddddddddddddddddddddddddd");
 					break;
 				}
 			}
@@ -477,6 +480,7 @@ public class Ex3Algo implements PacManAlgo {
 		List<Pixel2D> neighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
 		
 		if (neighbors.isEmpty()) {
+			System.out.println("no neighbors???");
 			return Game.UP;  // Shouldn't happen, but safety
 		}
 		
@@ -488,7 +492,9 @@ public class Ex3Algo implements PacManAlgo {
 			int cellValue = map.getPixel(neighbor);
 			if (cellValue == pink) {
 				// Found a power pellet in neighbor - go there immediately!
-				return getDirection(pacmanPos, neighbor);
+				// Yael: Maybe more efficient because its a neighbor
+				return moveTowardsTarget(pacmanPos, neighbor, map, obstacleColor);
+//				return getDirection(pacmanPos, neighbor);
 			}
 		}
 		
@@ -497,6 +503,7 @@ public class Ex3Algo implements PacManAlgo {
 		for (Pixel2D neighbor : neighbors) {
 			int cellValue = map.getPixel(neighbor);
 			if (cellValue == blue) {
+				// TODO yael delete this
 				// Found a dot in neighbor - go there immediately
 				return getDirection(pacmanPos, neighbor);
 			}
@@ -509,13 +516,15 @@ public class Ex3Algo implements PacManAlgo {
 		// Check for nearby power pellets (within a few steps) - prioritize them over distant dots
 		// BUT only if there are non-vulnerable ghosts or ghosts becoming non-vulnerable soon
 		boolean shouldGetPowerPellet = false;
-		for (GhostCL ghost : ghosts) {
-			double remainTime = ghost.remainTimeAsEatable(0);
-			if (remainTime <= 0 || (remainTime > 0 && remainTime < 10)) {
-				shouldGetPowerPellet = true;
-				break;
-			}
-		}
+		// TODO yael: return this?
+//		for (GhostCL ghost : ghosts) {
+//			double remainTime = ghost.remainTimeAsEatable(0);
+//			if (remainTime <= 0 || (remainTime > 0 && remainTime < 10)) {  // TODO yael: Maybe change the 10
+//				System.out.println("shouldGetPowerPellet = true");
+//				shouldGetPowerPellet = true;
+//				break;
+//			}
+//		}
 		
 		if (shouldGetPowerPellet) {
 			Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
@@ -558,7 +567,7 @@ public class Ex3Algo implements PacManAlgo {
 			for (int y = 0; y < map.getHeight(); y++) {
 				int cellValue = map.getPixel(x, y);
 				// Look for blue (dots) or any non-obstacle cell
-				if (cellValue == blue || (cellValue != obstacleColor && cellValue != -1)) {
+				if (cellValue == pink) {
 					Pixel2D dotPos = new Index2D(x, y);
 					int distance = pacmanDistances.getPixel(dotPos);
 					if (distance != -1 && distance > 0 && distance < bestDist) {
@@ -568,7 +577,18 @@ public class Ex3Algo implements PacManAlgo {
 				}
 			}
 		}
-		
+
+		if (bestDot != null)
+		{
+			if (bestDot.getX() == 22 && bestDot.getY() == 9)
+			{
+				System.out.println("ah");
+			}
+			System.out.println("best dot = " + bestDot.toString());
+		}
+		else{
+			System.out.println("There is no best dot");
+		}
 		if (bestDot != null) {
 			// Move towards the closest dot - this will handle cyclic properly
 			int dir = moveTowardsTarget(pacmanPos, bestDot, map, obstacleColor);
@@ -775,6 +795,8 @@ public class Ex3Algo implements PacManAlgo {
 	 * Gets the direction from one position to another.
 	 */
 	private int getDirection(Pixel2D from, Pixel2D to) {
+
+
 		int dx = to.getX() - from.getX();
 		int dy = to.getY() - from.getY();
 		
