@@ -46,60 +46,20 @@ public class Ex3Algo implements PacManAlgo {
 		int pink = Game.getIntColor(Color.PINK, code);
 
 		Map map = CreateMap(board);
+		Map2D pacmanDistances = map.allDistance(pacmanPos, OBSTACLE_COLOR);
 
 		// Determine state
-		State currentState = determineState(pacmanPos, ghosts, map, OBSTACLE_COLOR, pink);
+		State currentState = determineState(pacmanDistances, ghosts);
 		return executeState(currentState, pacmanPos, ghosts, map, OBSTACLE_COLOR, blue, pink);
 	}
 	
 	/**
 	 * Determines the current state based on game situation.
 	 */
-	private State determineState(Pixel2D pacmanPos, GhostCL[] ghosts, Map map, int obstacleColor, int pink) {
-		// Check for vulnerable ghosts
-		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
-		// Yael TODO: Does this is make sense?
-		for (GhostCL ghost : ghosts) {
-			if (isVulnerable(ghost)) {
-				Pixel2D ghostPos = getGhostPosition(ghost);
-				int dist = pacmanDistances.getPixel(ghostPos);
-				if (dist <= CHASE_THRESHOLD && dist > 0) {
-					return State.CHASE;
-				}
-			}
-		}
-		
-		// Check for immediate danger (escape priority)
-		for (GhostCL ghost : ghosts) {
-			if (!isVulnerable(ghost)) {
-				Pixel2D ghostPos = getGhostPosition(ghost);
-				int dist = pacmanDistances.getPixel(ghostPos);
-				if (dist <= DANGER_THRESHOLD && dist > 0) {
-					return State.ESCAPE;
-				}
-			}
-		}
-		
-		// Check if danger is near but manageable (get power pellet)
-		boolean dangerNear = false;
-		for (GhostCL ghost : ghosts) {
-			if (!isVulnerable(ghost)) {
-				Pixel2D ghostPos = getGhostPosition(ghost);
-				int dist = pacmanDistances.getPixel(ghostPos);
-				if (dist != -1 && dist <= DANGER_THRESHOLD + 3 && dist > 0) {
-					dangerNear = true;
-					break;
-				}
-			}
-		}
-		if (dangerNear) {
-			return State.GET_POWER_PELLET;
-		}
-		
-		// When safe (no ghosts nearby), prioritize power pellets
-		// This will be handled in executeState by passing pink color
-		
-		// Default: eat dots
+	private State determineState(Map2D pacmanDistances, GhostCL[] ghosts) {
+		if (IsNeedToEscape(pacmanDistances, ghosts)) {return State.ESCAPE;}
+		if (IsNeedToChase(pacmanDistances, ghosts)) {return State.CHASE;}
+		if (IsNeedPowerPellet(pacmanDistances, ghosts)) {return State.GET_POWER_PELLET;}
 		return State.EAT_DOTS;
 	}
 	
@@ -108,18 +68,12 @@ public class Ex3Algo implements PacManAlgo {
 	 */
 	private int executeState(State state, Pixel2D pacmanPos, GhostCL[] ghosts, 
 	                        Map map, int obstacleColor, int blue, int pink) {
-		switch (state) {
-			case CHASE:
-				return chaseVulnerableGhosts(pacmanPos, ghosts, map, obstacleColor);
-			case ESCAPE:
-				return escapeFromGhosts(pacmanPos, ghosts, map, obstacleColor);
-			case GET_POWER_PELLET:
-				return getPowerPellet(pacmanPos, ghosts, map, obstacleColor, pink);
-			case EAT_DOTS:
-				return eatDots(pacmanPos, ghosts, map, obstacleColor, blue);
-			default:
-				return eatDots(pacmanPos, ghosts, map, obstacleColor, blue);
-		}
+		return switch (state) {
+			case CHASE -> chaseVulnerableGhosts(pacmanPos, ghosts, map, obstacleColor);
+			case ESCAPE -> escapeFromGhosts(pacmanPos, ghosts, map, obstacleColor);
+			case GET_POWER_PELLET -> getPowerPellet(pacmanPos, ghosts, map, obstacleColor, pink);
+			case EAT_DOTS -> eatDots(pacmanPos, ghosts, map, obstacleColor, blue);
+		};
 	}
 	
 	/**
@@ -128,45 +82,26 @@ public class Ex3Algo implements PacManAlgo {
 	 */
 	private int chaseVulnerableGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, 
 	                                  Map map, int obstacleColor) {
+		// TODO generate distances only once and pass them
 		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
 		GhostCL bestGhost = null;
 		int bestDist = Integer.MAX_VALUE;
-		
-		// Calculate spawn area (middle of map) - avoid this area
-		int centerX = map.getWidth() / 2;
-		int centerY = map.getHeight() / 2;
-		int spawnRadius = Math.min(map.getWidth(), map.getHeight()) / 4;  // Avoid area around center
 		
 		for (GhostCL ghost : ghosts) {
 			if (isVulnerable(ghost)) {
 				Pixel2D ghostPos = getGhostPosition(ghost);
 				int distance = pacmanDistances.getPixel(ghostPos);
-				
-				// Check if ghost is in spawn area
-				int dx = Math.abs(ghostPos.getX() - centerX);
-				int dy = Math.abs(ghostPos.getY() - centerY);
-				// Handle cyclic wrapping for distance calculation
-				if (map.isCyclic()) {
-					if (dx > map.getWidth() / 2) dx = map.getWidth() - dx;
-					if (dy > map.getHeight() / 2) dy = map.getHeight() - dy;
-				}
-				boolean inSpawnArea = (dx < spawnRadius && dy < spawnRadius);
-				
+
 				// Only chase if ghost is reachable, within threshold, and not in spawn area
-				if (distance != -1 && distance > 0 && distance < bestDist && 
-				    distance <= CHASE_THRESHOLD && !inSpawnArea) {
+				if (distance > 0 && distance < bestDist && distance <= CHASE_THRESHOLD) {
 					bestDist = distance;
 					bestGhost = ghost;
 				}
 			}
 		}
-		
-		if (bestGhost != null) {
-			return moveTowardsTarget(pacmanPos, getGhostPosition(bestGhost), map, obstacleColor);
-		}
-		
-		// Fallback
-		return eatDots(pacmanPos, ghosts, map, obstacleColor, 0);
+
+		assert bestGhost != null;
+		return moveTowardsTarget(pacmanPos, getGhostPosition(bestGhost), map, obstacleColor);
 	}
 	
 	/**
@@ -293,7 +228,7 @@ public class Ex3Algo implements PacManAlgo {
 			if (remainTime > 10) {
 				Pixel2D ghostPos = getGhostPosition(ghost);
 				int dist = pacmanDistances.getPixel(ghostPos);
-				if (dist != -1 && dist > 0 && dist <= CHASE_THRESHOLD + 3) {
+				if (dist > 0 && dist <= CHASE_THRESHOLD + 3) {
 					// Vulnerable ghost with lots of time nearby - chase it instead
 					return chaseVulnerableGhosts(pacmanPos, ghosts, map, obstacleColor);
 				}
@@ -722,20 +657,12 @@ public class Ex3Algo implements PacManAlgo {
 	private Pixel2D getNextPosition(Pixel2D pos, int direction, Map map) {
 		int x = pos.getX();
 		int y = pos.getY();
-		
+
 		switch (direction) {
-			case Game.UP:
-				y = y + 1;
-				break;
-			case Game.DOWN:
-				y = y - 1;
-				break;
-			case Game.LEFT:
-				x = x - 1;
-				break;
-			case Game.RIGHT:
-				x = x + 1;
-				break;
+			case Game.UP -> y = y + 1;
+			case Game.DOWN -> y = y - 1;
+			case Game.LEFT -> x = x - 1;
+			case Game.RIGHT -> x = x + 1;
 		}
 		
 		if (map.isCyclic()) {
@@ -802,34 +729,7 @@ public class Ex3Algo implements PacManAlgo {
 	 * Gets ghost position as Pixel2D.
 	 */
 	private Pixel2D getGhostPosition(GhostCL ghost) {
-		return parsePosition(ghost.getPos(0).toString());
-	}
-	
-	/**
-	 * Checks if two positions are equal considering cyclic wrapping.
-	 */
-	private boolean areCyclicallyEqual(Pixel2D p1, Pixel2D p2, Map map) {
-		if (p1.equals(p2)) return true;
-		if (!map.isCyclic()) return false;
-		
-		// Check if they're the same after wrapping
-		int x1 = p1.getX();
-		int y1 = p1.getY();
-		int x2 = p2.getX();
-		int y2 = p2.getY();
-		
-		// Normalize coordinates
-		if (x1 < 0) x1 = map.getWidth() + x1;
-		if (x1 >= map.getWidth()) x1 = x1 - map.getWidth();
-		if (y1 < 0) y1 = map.getHeight() + y1;
-		if (y1 >= map.getHeight()) y1 = y1 - map.getHeight();
-		
-		if (x2 < 0) x2 = map.getWidth() + x2;
-		if (x2 >= map.getWidth()) x2 = x2 - map.getWidth();
-		if (y2 < 0) y2 = map.getHeight() + y2;
-		if (y2 >= map.getHeight()) y2 = y2 - map.getHeight();
-		
-		return x1 == x2 && y1 == y2;
+		return parsePosition(ghost.getPos(0));
 	}
 
 	private Map CreateMap(int [][] board) {
@@ -850,5 +750,53 @@ public class Ex3Algo implements PacManAlgo {
 		map.setCyclic(GameInfo.CYCLIC_MODE);
 
 		return map;
+	}
+
+	private boolean IsNeedToEscape(Map2D pacmanDistances, GhostCL[] ghosts) {
+		for (GhostCL ghost : ghosts) {
+			if (!isVulnerable(ghost)) {
+				Pixel2D ghostPos = getGhostPosition(ghost);
+				int dist = pacmanDistances.getPixel(ghostPos);
+				if (dist <= DANGER_THRESHOLD) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private boolean IsNeedToChase(Map2D pacmanDistances, GhostCL[] ghosts) {
+		// Calculate spawn area (middle of map) - avoid this area
+		int centerX = pacmanDistances.getWidth() / 2;
+		int centerY = pacmanDistances.getHeight() / 2;
+		int spawnRadius = 3;  // Avoid area around center
+
+		for (GhostCL ghost : ghosts) {
+			if (isVulnerable(ghost)) {
+				Pixel2D ghostPos = getGhostPosition(ghost);
+				int dist = pacmanDistances.getPixel(ghostPos);
+				int dx = Math.abs(ghostPos.getX() - centerX);
+				int dy = Math.abs(ghostPos.getY() - centerY);
+				boolean inSpawnArea = (dx < spawnRadius && dy < spawnRadius);
+				if (dist <= CHASE_THRESHOLD && !inSpawnArea) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private boolean IsNeedPowerPellet(Map2D pacmanDistances, GhostCL[] ghosts) {
+		// TODO maybe change it to get this more often
+		for (GhostCL ghost : ghosts) {
+			if (!isVulnerable(ghost)) {
+				Pixel2D ghostPos = getGhostPosition(ghost);
+				int dist = pacmanDistances.getPixel(ghostPos);
+				if (dist > DANGER_THRESHOLD && dist <= DANGER_THRESHOLD + 3) {
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 }
