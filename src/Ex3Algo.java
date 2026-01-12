@@ -117,12 +117,6 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		}
 		
-		// Reset position history when not escaping (to allow normal movement)
-		if (currentState != State.ESCAPE) {
-			_lastPosition = null;
-			_secondLastPosition = null;
-		}
-		
 		// Execute state behavior
 		int direction = executeState(currentState, pacmanPos, ghosts, map, obstacleColor, blue, pink);
 		
@@ -284,13 +278,9 @@ public class Ex3Algo implements PacManAlgo {
 		return eatDots(pacmanPos, ghosts, map, obstacleColor, 0);
 	}
 	
-	// Track recent positions to avoid loops
-	private Pixel2D _lastPosition = null;
-	private Pixel2D _secondLastPosition = null;
-	
 	/**
 	 * ESCAPE state: Choose neighbor that maximizes minimum distance to ghosts.
-	 * Avoids endless loops and checks if escape direction will trap Pacman.
+	 * Checks if escape direction will trap Pacman.
 	 */
 	private int escapeFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, 
 	                             Map map, int obstacleColor) {
@@ -321,11 +311,6 @@ public class Ex3Algo implements PacManAlgo {
 		double bestScore = Double.NEGATIVE_INFINITY;
 		
 		for (Pixel2D neighbor : validNeighbors) {
-			// Avoid going back to recent positions (prevent loops)
-			if (neighbor.equals(_lastPosition) || neighbor.equals(_secondLastPosition)) {
-				continue;  // Skip positions we just visited
-			}
-			
 			// Calculate safety score for this neighbor
 			Map2D neighborDistances = map.allDistance(neighbor, obstacleColor);
 			
@@ -382,7 +367,7 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		}
 		
-		// If all directions lead to traps or loops, pick the safest one anyway
+		// If all directions lead to traps, pick the safest one anyway
 		if (bestScore == Double.NEGATIVE_INFINITY) {
 			// Reset and pick based on minimum distance only
 			for (Pixel2D neighbor : validNeighbors) {
@@ -400,10 +385,6 @@ public class Ex3Algo implements PacManAlgo {
 				}
 			}
 		}
-		
-		// Update position history
-		_secondLastPosition = _lastPosition;
-		_lastPosition = pacmanPos;
 		
 		return bestDir;
 	}
