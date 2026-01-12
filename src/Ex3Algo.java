@@ -69,28 +69,46 @@ public class Ex3Algo implements PacManAlgo {
 		State currentState = determineState(pacmanPos, ghosts, map, obstacleColor, pink);
 		
 		// When safe (no ghosts nearby), prioritize power pellets if they exist and are close
+		// BUT only if ghosts are NOT vulnerable (or won't be vulnerable soon)
 		if (currentState == State.EAT_DOTS) {
+			// Check if any ghost is currently vulnerable or will be vulnerable soon
+			boolean hasVulnerableGhosts = false;
 			Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
-			Pixel2D closestPellet = null;
-			int closestPelletDist = Integer.MAX_VALUE;
-			
-			// Check for nearby power pellets (within reasonable distance)
-			for (int x = 0; x < map.getWidth(); x++) {
-				for (int y = 0; y < map.getHeight(); y++) {
-					if (map.getPixel(x, y) == pink) {
-						Pixel2D pelletPos = new Index2D(x, y);
-						int distance = pacmanDistances.getPixel(pelletPos);
-						if (distance != -1 && distance > 0 && distance < closestPelletDist) {
-							closestPelletDist = distance;
-							closestPellet = pelletPos;
-						}
+			for (GhostCL ghost : ghosts) {
+				if (isVulnerable(ghost)) {
+					Pixel2D ghostPos = getGhostPosition(ghost);
+					int dist = pacmanDistances.getPixel(ghostPos);
+					// If vulnerable ghost is within chase range, don't go for power pellet
+					if (dist != -1 && dist > 0 && dist <= CHASE_THRESHOLD + 3) {
+						hasVulnerableGhosts = true;
+						break;
 					}
 				}
 			}
 			
-			// If there's a power pellet within reasonable distance (e.g., 15 steps), prioritize it
-			if (closestPellet != null && closestPelletDist <= 15) {
-				currentState = State.GET_POWER_PELLET;
+			// Only go for power pellets if no vulnerable ghosts are nearby
+			if (!hasVulnerableGhosts) {
+				Pixel2D closestPellet = null;
+				int closestPelletDist = Integer.MAX_VALUE;
+				
+				// Check for nearby power pellets (within reasonable distance)
+				for (int x = 0; x < map.getWidth(); x++) {
+					for (int y = 0; y < map.getHeight(); y++) {
+						if (map.getPixel(x, y) == pink) {
+							Pixel2D pelletPos = new Index2D(x, y);
+							int distance = pacmanDistances.getPixel(pelletPos);
+							if (distance != -1 && distance > 0 && distance < closestPelletDist) {
+								closestPelletDist = distance;
+								closestPellet = pelletPos;
+							}
+						}
+					}
+				}
+				
+				// If there's a power pellet within reasonable distance (e.g., 15 steps), prioritize it
+				if (closestPellet != null && closestPelletDist <= 15) {
+					currentState = State.GET_POWER_PELLET;
+				}
 			}
 		}
 		
@@ -204,7 +222,7 @@ public class Ex3Algo implements PacManAlgo {
 			case ESCAPE:
 				return escapeFromGhosts(pacmanPos, ghosts, map, obstacleColor);
 			case GET_POWER_PELLET:
-				return getPowerPellet(pacmanPos, map, obstacleColor, pink);
+				return getPowerPellet(pacmanPos, ghosts, map, obstacleColor, pink);
 			case EAT_DOTS:
 				return eatDots(pacmanPos, map, obstacleColor, blue);
 			default:
@@ -385,9 +403,21 @@ public class Ex3Algo implements PacManAlgo {
 	
 	/**
 	 * GET_POWER_PELLET state: Find and move towards the closest power pellet.
-	 * Prioritized when safe (no ghosts nearby).
+	 * Prioritized when safe (no ghosts nearby) and ghosts are NOT vulnerable.
 	 */
-	private int getPowerPellet(Pixel2D pacmanPos, Map map, int obstacleColor, int pink) {
+	private int getPowerPellet(Pixel2D pacmanPos, GhostCL[] ghosts, Map map, int obstacleColor, int pink) {
+		// Double-check: if any ghost is vulnerable and close, chase it instead
+		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
+		for (GhostCL ghost : ghosts) {
+			if (isVulnerable(ghost)) {
+				Pixel2D ghostPos = getGhostPosition(ghost);
+				int dist = pacmanDistances.getPixel(ghostPos);
+				if (dist != -1 && dist > 0 && dist <= CHASE_THRESHOLD + 3) {
+					// Vulnerable ghost nearby - chase it instead
+					return chaseVulnerableGhosts(pacmanPos, ghosts, map, obstacleColor);
+				}
+			}
+		}
 		// First check immediate neighbors - if power pellet is adjacent, go there!
 		List<Pixel2D> neighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
 		for (Pixel2D neighbor : neighbors) {
@@ -398,8 +428,7 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		}
 		
-		// Find closest power pellet
-		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
+		// Find closest power pellet (reuse pacmanDistances already calculated above)
 		Pixel2D bestPellet = null;
 		int bestDist = Integer.MAX_VALUE;
 		
@@ -490,13 +519,14 @@ public class Ex3Algo implements PacManAlgo {
 		}
 		
 		// If there's a power pellet nearby (within 10 steps), go for it
+		// BUT only if no ghosts are vulnerable (check passed from state determination)
 		if (closestPellet != null && closestPelletDist <= 10) {
 			int dir = moveTowardsTarget(pacmanPos, closestPellet, map, obstacleColor);
 			Pixel2D nextPos = getNextPosition(pacmanPos, dir, map);
 			if (isValidPosition(nextPos, map, obstacleColor)) {
 				return dir;
 			}
-			// Fallback to direct direction
+			// Fallback to direct direction with cyclic support
 			return getDirectionToTarget(pacmanPos, closestPellet, map);
 		}
 		
@@ -606,18 +636,50 @@ public class Ex3Algo implements PacManAlgo {
 		Pixel2D[] path = map.shortestPath(from, to, obstacleColor);
 		if (path != null && path.length > 1) {
 			Pixel2D nextStep = path[1];
-			// Verify nextStep is actually adjacent
-			int stepDx = Math.abs(nextStep.getX() - from.getX());
-			int stepDy = Math.abs(nextStep.getY() - from.getY());
-			// Handle cyclic wrapping
+			
+			// Calculate the actual direction needed to reach nextStep
+			// Handle cyclic wrapping properly
+			int stepDx = nextStep.getX() - from.getX();
+			int stepDy = nextStep.getY() - from.getY();
+			
+			// In cyclic mode, check if wrapping gives a shorter path
 			if (map.isCyclic()) {
-				if (stepDx > map.getWidth() / 2) stepDx = map.getWidth() - stepDx;
-				if (stepDy > map.getHeight() / 2) stepDy = map.getHeight() - stepDy;
+				int wrappedDx = stepDx;
+				int wrappedDy = stepDy;
+				
+				if (Math.abs(stepDx) > map.getWidth() / 2) {
+					wrappedDx = stepDx > 0 ? stepDx - map.getWidth() : stepDx + map.getWidth();
+				}
+				if (Math.abs(stepDy) > map.getHeight() / 2) {
+					wrappedDy = stepDy > 0 ? stepDy - map.getHeight() : stepDy + map.getHeight();
+				}
+				
+				// Use wrapped direction if it's shorter
+				if (Math.abs(wrappedDx) < Math.abs(stepDx)) stepDx = wrappedDx;
+				if (Math.abs(wrappedDy) < Math.abs(stepDy)) stepDy = wrappedDy;
 			}
 			
-			if (stepDx + stepDy == 1) {
-				int dir = getDirection(from, nextStep);
-				Pixel2D nextPos = getNextPosition(from, dir, map);
+			// Determine direction from stepDx and stepDy
+			int dir;
+			if (Math.abs(stepDx) > Math.abs(stepDy)) {
+				dir = stepDx > 0 ? Game.RIGHT : Game.LEFT;
+			} else if (stepDy != 0) {
+				dir = stepDy > 0 ? Game.UP : Game.DOWN;
+			} else {
+				// Fallback to regular direction
+				dir = getDirection(from, nextStep);
+			}
+			
+			Pixel2D nextPos = getNextPosition(from, dir, map);
+			if (isValidPosition(nextPos, map, obstacleColor)) {
+				// Verify nextPos is correct (might need to check cyclic equality)
+				return dir;
+			}
+			
+			// If that didn't work, try the other direction (in case of tie)
+			if (Math.abs(stepDx) == Math.abs(stepDy) && stepDx != 0 && stepDy != 0) {
+				dir = stepDy > 0 ? Game.UP : Game.DOWN;
+				nextPos = getNextPosition(from, dir, map);
 				if (isValidPosition(nextPos, map, obstacleColor)) {
 					return dir;
 				}
@@ -640,8 +702,23 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		}
 		
-		// If still no valid direction, try all directions
-		int[] dirs = {Game.UP, Game.LEFT, Game.DOWN, Game.RIGHT};
+		// If still no valid direction, try all directions in order of preference
+		// In cyclic mode, try the direction that moves towards target first
+		int[] dirs;
+		if (map.isCyclic() && Math.abs(dx) > Math.abs(dy)) {
+			// Prefer horizontal movement
+			dirs = dx > 0 ? 
+				new int[]{Game.RIGHT, Game.LEFT, Game.UP, Game.DOWN} :
+				new int[]{Game.LEFT, Game.RIGHT, Game.UP, Game.DOWN};
+		} else if (map.isCyclic() && dy != 0) {
+			// Prefer vertical movement
+			dirs = dy > 0 ?
+				new int[]{Game.UP, Game.DOWN, Game.LEFT, Game.RIGHT} :
+				new int[]{Game.DOWN, Game.UP, Game.LEFT, Game.RIGHT};
+		} else {
+			dirs = new int[]{Game.UP, Game.LEFT, Game.DOWN, Game.RIGHT};
+		}
+		
 		for (int dir : dirs) {
 			Pixel2D nextPos = getNextPosition(from, dir, map);
 			if (isValidPosition(nextPos, map, obstacleColor)) {
@@ -805,5 +882,32 @@ public class Ex3Algo implements PacManAlgo {
 	 */
 	private Pixel2D getGhostPosition(GhostCL ghost) {
 		return parsePosition(ghost.getPos(0).toString());
+	}
+	
+	/**
+	 * Checks if two positions are equal considering cyclic wrapping.
+	 */
+	private boolean areCyclicallyEqual(Pixel2D p1, Pixel2D p2, Map map) {
+		if (p1.equals(p2)) return true;
+		if (!map.isCyclic()) return false;
+		
+		// Check if they're the same after wrapping
+		int x1 = p1.getX();
+		int y1 = p1.getY();
+		int x2 = p2.getX();
+		int y2 = p2.getY();
+		
+		// Normalize coordinates
+		if (x1 < 0) x1 = map.getWidth() + x1;
+		if (x1 >= map.getWidth()) x1 = x1 - map.getWidth();
+		if (y1 < 0) y1 = map.getHeight() + y1;
+		if (y1 >= map.getHeight()) y1 = y1 - map.getHeight();
+		
+		if (x2 < 0) x2 = map.getWidth() + x2;
+		if (x2 >= map.getWidth()) x2 = x2 - map.getWidth();
+		if (y2 < 0) y2 = map.getHeight() + y2;
+		if (y2 >= map.getHeight()) y2 = y2 - map.getHeight();
+		
+		return x1 == x2 && y1 == y2;
 	}
 }
