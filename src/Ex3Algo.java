@@ -50,7 +50,7 @@ public class Ex3Algo implements PacManAlgo {
 
 		// Determine state
 		State currentState = determineState(pacmanDistances, ghosts);
-		return executeState(currentState, pacmanPos, ghosts, map, OBSTACLE_COLOR, blue, pink);
+		return executeState(pacmanDistances, currentState, pacmanPos, ghosts, map, OBSTACLE_COLOR, blue, pink);
 	}
 	
 	/**
@@ -66,10 +66,10 @@ public class Ex3Algo implements PacManAlgo {
 	/**
 	 * Executes the behavior for the current state.
 	 */
-	private int executeState(State state, Pixel2D pacmanPos, GhostCL[] ghosts, 
+	private int executeState(Map2D pacmanDistances, State state, Pixel2D pacmanPos, GhostCL[] ghosts,
 	                        Map map, int obstacleColor, int blue, int pink) {
 		return switch (state) {
-			case CHASE -> chaseVulnerableGhosts(pacmanPos, ghosts, map, obstacleColor);
+			case CHASE -> chaseVulnerableGhosts(pacmanDistances, pacmanPos, ghosts, map, obstacleColor);
 			case ESCAPE -> escapeFromGhosts(pacmanPos, ghosts, map, obstacleColor);
 			case GET_POWER_PELLET -> getPowerPellet(pacmanPos, ghosts, map, obstacleColor, pink);
 			case EAT_DOTS -> eatDots(pacmanPos, ghosts, map, obstacleColor, blue);
@@ -80,10 +80,8 @@ public class Ex3Algo implements PacManAlgo {
 	 * CHASE state: Find and chase the closest vulnerable ghost.
 	 * Avoids chasing ghosts into the spawn area (middle of map).
 	 */
-	private int chaseVulnerableGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, 
+	private int chaseVulnerableGhosts(Map2D pacmanDistances, Pixel2D pacmanPos, GhostCL[] ghosts,
 	                                  Map map, int obstacleColor) {
-		// TODO generate distances only once and pass them
-		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
 		GhostCL bestGhost = null;
 		int bestDist = Integer.MAX_VALUE;
 		
@@ -92,8 +90,8 @@ public class Ex3Algo implements PacManAlgo {
 				Pixel2D ghostPos = getGhostPosition(ghost);
 				int distance = pacmanDistances.getPixel(ghostPos);
 
-				// Only chase if ghost is reachable, within threshold, and not in spawn area
-				if (distance > 0 && distance < bestDist && distance <= CHASE_THRESHOLD) {
+				// Only chase if ghost is reachable, within threshold
+				if (distance < bestDist && distance <= CHASE_THRESHOLD) {
 					bestDist = distance;
 					bestGhost = ghost;
 				}
@@ -108,13 +106,8 @@ public class Ex3Algo implements PacManAlgo {
 	 * ESCAPE state: Choose neighbor that maximizes minimum distance to ghosts.
 	 * Checks if escape direction will trap Pacman.
 	 */
-	private int escapeFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, 
-	                             Map map, int obstacleColor) {
+	private int escapeFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, Map map, int obstacleColor) {
 		List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
-		
-		if (validNeighbors.isEmpty()) {
-			return Game.UP;
-		}
 		
 		// Get all non-vulnerable ghosts
 		List<Pixel2D> dangerousGhosts = new ArrayList<>();
@@ -123,15 +116,8 @@ public class Ex3Algo implements PacManAlgo {
 				dangerousGhosts.add(getGhostPosition(ghost));
 			}
 		}
-		
-		if (dangerousGhosts.isEmpty()) {
-			// No dangerous ghosts, just move normally
-			return eatDots(pacmanPos, ghosts, map, obstacleColor, 0);
-		}
-		
-		// Calculate distances from current position to all ghosts
-		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
-		
+		assert !dangerousGhosts.isEmpty();
+
 		// Find the best escape direction
 		int bestDir = Game.UP;
 		double bestScore = Double.NEGATIVE_INFINITY;
@@ -147,13 +133,11 @@ public class Ex3Algo implements PacManAlgo {
 			
 			for (Pixel2D ghostPos : dangerousGhosts) {
 				int dist = neighborDistances.getPixel(ghostPos);
-				if (dist != -1) {
-					if (dist < minDist) {
-						minDist = dist;
-					}
-					sumDist += dist;
-					count++;
+				if (dist < minDist) {
+					minDist = dist;
 				}
+				sumDist += dist;
+				count++;
 			}
 			
 			// Check if this neighbor will lead to being trapped
@@ -167,7 +151,7 @@ public class Ex3Algo implements PacManAlgo {
 					Map2D futureDistances = map.allDistance(futureNeighbor, obstacleColor);
 					for (Pixel2D ghostPos : dangerousGhosts) {
 						int dist = futureDistances.getPixel(ghostPos);
-						if (dist != -1 && dist < futureMinDist) {
+						if (dist < futureMinDist) {
 							futureMinDist = dist;
 						}
 					}
@@ -183,7 +167,7 @@ public class Ex3Algo implements PacManAlgo {
 			}
 			
 			// Calculate score: prefer higher minimum distance and higher average distance
-			double avgDist = count > 0 ? (double)sumDist / count : 0;
+			double avgDist = sumDist / (double)count;
 			double score = minDist * 2.0 + avgDist * 0.5;  // Weight minimum distance more
 			
 			// Prefer directions that increase distance from all ghosts
@@ -192,26 +176,7 @@ public class Ex3Algo implements PacManAlgo {
 				bestDir = getDirection(pacmanPos, neighbor);
 			}
 		}
-		
-		// If all directions lead to traps, pick the safest one anyway
-		if (bestScore == Double.NEGATIVE_INFINITY) {
-			// Reset and pick based on minimum distance only
-			for (Pixel2D neighbor : validNeighbors) {
-				Map2D neighborDistances = map.allDistance(neighbor, obstacleColor);
-				int minDist = Integer.MAX_VALUE;
-				for (Pixel2D ghostPos : dangerousGhosts) {
-					int dist = neighborDistances.getPixel(ghostPos);
-					if (dist != -1 && dist < minDist) {
-						minDist = dist;
-					}
-				}
-				if (minDist > bestScore || bestScore == Double.NEGATIVE_INFINITY) {
-					bestScore = minDist;
-					bestDir = getDirection(pacmanPos, neighbor);
-				}
-			}
-		}
-		
+
 		return bestDir;
 	}
 	
@@ -230,7 +195,7 @@ public class Ex3Algo implements PacManAlgo {
 				int dist = pacmanDistances.getPixel(ghostPos);
 				if (dist > 0 && dist <= CHASE_THRESHOLD + 3) {
 					// Vulnerable ghost with lots of time nearby - chase it instead
-					return chaseVulnerableGhosts(pacmanPos, ghosts, map, obstacleColor);
+					return chaseVulnerableGhosts(pacmanDistances, pacmanPos, ghosts, map, obstacleColor);
 				}
 			}
 		}
@@ -705,7 +670,7 @@ public class Ex3Algo implements PacManAlgo {
 	 * Checks if a ghost is vulnerable.
 	 */
 	private boolean isVulnerable(GhostCL ghost) {
-		return ghost.remainTimeAsEatable(0) > 0;
+		return ghost.remainTimeAsEatable(0) > 0.5;
 	}
 	
 	/**
