@@ -5,28 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="14703d92-7567-40b3-b658-ae89a3d5f4f6" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/libraries/Ex3_v09e_jar_out.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/I2CS_Ex3.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/g0.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/g1.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/g2.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/g3.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/libs/Ex3_v09e.jar-out.jar" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/p1.png" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Ex3Algo.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Ex3Main.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/GameInfo.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Index2D.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/ManualAlgo.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Map.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Map2D.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/Pixel2D.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/test.bit" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/Readme.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
