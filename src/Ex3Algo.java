@@ -24,7 +24,7 @@ public class Ex3Algo implements PacManAlgo {
 	
 	// Constants
 	private static final int DANGER_THRESHOLD = 3;  // Distance threshold for immediate danger
-	private static final int CHASE_THRESHOLD = 5;  // Max distance to chase vulnerable ghosts
+	private static final int CHASE_THRESHOLD = 10;  // Max distance to chase vulnerable ghosts
 	
 	public Ex3Algo() {
 		_count = 0;
@@ -85,6 +85,12 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		}
 		
+		// Reset position history when not escaping (to allow normal movement)
+		if (currentState != State.ESCAPE) {
+			_lastPosition = null;
+			_secondLastPosition = null;
+		}
+		
 		// Execute state behavior
 		int direction = executeState(currentState, pacmanPos, ghosts, map, obstacleColor, blue, pink);
 		
@@ -100,6 +106,7 @@ public class Ex3Algo implements PacManAlgo {
 			List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
 			if (!validNeighbors.isEmpty()) {
 				direction = getDirection(pacmanPos, validNeighbors.get(0));
+				nextPos = getNextPosition(pacmanPos, direction, map);
 			} else {
 				// Last resort: try each direction
 				int[] dirs = {Game.UP, Game.LEFT, Game.DOWN, Game.RIGHT};
@@ -110,6 +117,16 @@ public class Ex3Algo implements PacManAlgo {
 						break;
 					}
 				}
+			}
+		}
+		
+		// Final verification: ensure next position is actually valid
+		nextPos = getNextPosition(pacmanPos, direction, map);
+		if (!isValidPosition(nextPos, map, obstacleColor)) {
+			// Absolute fallback - this should never happen, but handle it
+			List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
+			if (!validNeighbors.isEmpty()) {
+				direction = getDirection(pacmanPos, validNeighbors.get(0));
 			}
 		}
 		
@@ -233,8 +250,13 @@ public class Ex3Algo implements PacManAlgo {
 		return eatDots(pacmanPos, map, obstacleColor, 0);
 	}
 	
+	// Track recent positions to avoid loops
+	private Pixel2D _lastPosition = null;
+	private Pixel2D _secondLastPosition = null;
+	
 	/**
 	 * ESCAPE state: Choose neighbor that maximizes minimum distance to ghosts.
+	 * Avoids endless loops and checks if escape direction will trap Pacman.
 	 */
 	private int escapeFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, 
 	                             Map map, int obstacleColor) {
@@ -244,28 +266,110 @@ public class Ex3Algo implements PacManAlgo {
 			return Game.UP;
 		}
 		
+		// Get all non-vulnerable ghosts
+		List<Pixel2D> dangerousGhosts = new ArrayList<>();
+		for (GhostCL ghost : ghosts) {
+			if (!isVulnerable(ghost)) {
+				dangerousGhosts.add(getGhostPosition(ghost));
+			}
+		}
+		
+		if (dangerousGhosts.isEmpty()) {
+			// No dangerous ghosts, just move normally
+			return eatDots(pacmanPos, map, obstacleColor, 0);
+		}
+		
+		// Calculate distances from current position to all ghosts
+		Map2D pacmanDistances = map.allDistance(pacmanPos, obstacleColor);
+		
+		// Find the best escape direction
 		int bestDir = Game.UP;
-		int bestMinDist = -1;
+		double bestScore = Double.NEGATIVE_INFINITY;
 		
 		for (Pixel2D neighbor : validNeighbors) {
-			Map2D neighborDistances = map.allDistance(neighbor, obstacleColor);
-			int minDist = Integer.MAX_VALUE;
+			// Avoid going back to recent positions (prevent loops)
+			if (neighbor.equals(_lastPosition) || neighbor.equals(_secondLastPosition)) {
+				continue;  // Skip positions we just visited
+			}
 			
-			for (GhostCL ghost : ghosts) {
-				if (!isVulnerable(ghost)) {
-					Pixel2D ghostPos = getGhostPosition(ghost);
+			// Calculate safety score for this neighbor
+			Map2D neighborDistances = map.allDistance(neighbor, obstacleColor);
+			
+			// Find minimum distance to any ghost from this neighbor
+			int minDist = Integer.MAX_VALUE;
+			int sumDist = 0;
+			int count = 0;
+			
+			for (Pixel2D ghostPos : dangerousGhosts) {
+				int dist = neighborDistances.getPixel(ghostPos);
+				if (dist != -1) {
+					if (dist < minDist) {
+						minDist = dist;
+					}
+					sumDist += dist;
+					count++;
+				}
+			}
+			
+			// Check if this neighbor will lead to being trapped
+			// Look ahead: check if from this neighbor, we can escape further
+			boolean willBeTrapped = false;
+			if (minDist <= 2) {
+				// If we'll be very close to a ghost, check if we can escape further
+				List<Pixel2D> futureNeighbors = getValidNeighbors(neighbor, map, obstacleColor);
+				int futureMinDist = Integer.MAX_VALUE;
+				for (Pixel2D futureNeighbor : futureNeighbors) {
+					Map2D futureDistances = map.allDistance(futureNeighbor, obstacleColor);
+					for (Pixel2D ghostPos : dangerousGhosts) {
+						int dist = futureDistances.getPixel(ghostPos);
+						if (dist != -1 && dist < futureMinDist) {
+							futureMinDist = dist;
+						}
+					}
+				}
+				// If future positions are also dangerous, we might be trapped
+				if (futureMinDist <= 1) {
+					willBeTrapped = true;
+				}
+			}
+			
+			if (willBeTrapped) {
+				continue;  // Skip this direction, it leads to a trap
+			}
+			
+			// Calculate score: prefer higher minimum distance and higher average distance
+			double avgDist = count > 0 ? (double)sumDist / count : 0;
+			double score = minDist * 2.0 + avgDist * 0.5;  // Weight minimum distance more
+			
+			// Prefer directions that increase distance from all ghosts
+			if (score > bestScore) {
+				bestScore = score;
+				bestDir = getDirection(pacmanPos, neighbor);
+			}
+		}
+		
+		// If all directions lead to traps or loops, pick the safest one anyway
+		if (bestScore == Double.NEGATIVE_INFINITY) {
+			// Reset and pick based on minimum distance only
+			for (Pixel2D neighbor : validNeighbors) {
+				Map2D neighborDistances = map.allDistance(neighbor, obstacleColor);
+				int minDist = Integer.MAX_VALUE;
+				for (Pixel2D ghostPos : dangerousGhosts) {
 					int dist = neighborDistances.getPixel(ghostPos);
 					if (dist != -1 && dist < minDist) {
 						minDist = dist;
 					}
 				}
-			}
-			
-			if (minDist > bestMinDist) {
-				bestMinDist = minDist;
-				bestDir = getDirection(pacmanPos, neighbor);
+				if (minDist > bestScore || bestScore == Double.NEGATIVE_INFINITY) {
+					bestScore = minDist;
+					bestDir = getDirection(pacmanPos, neighbor);
+				}
 			}
 		}
+		
+		// Update position history
+		_secondLastPosition = _lastPosition;
+		_lastPosition = pacmanPos;
 		
 		return bestDir;
 	}
@@ -442,14 +546,26 @@ public class Ex3Algo implements PacManAlgo {
 		Pixel2D[] path = map.shortestPath(from, to, obstacleColor);
 		if (path != null && path.length > 1) {
 			Pixel2D nextStep = path[1];
-			int dir = getDirection(from, nextStep);
-			Pixel2D nextPos = getNextPosition(from, dir, map);
-			if (isValidPosition(nextPos, map, obstacleColor)) {
-				return dir;
+			// Verify nextStep is actually adjacent
+			int stepDx = Math.abs(nextStep.getX() - from.getX());
+			int stepDy = Math.abs(nextStep.getY() - from.getY());
+			// Handle cyclic wrapping
+			if (map.isCyclic()) {
+				if (stepDx > map.getWidth() / 2) stepDx = map.getWidth() - stepDx;
+				if (stepDy > map.getHeight() / 2) stepDy = map.getHeight() - stepDy;
+			}
+			
+			if (stepDx + stepDy == 1) {
+				int dir = getDirection(from, nextStep);
+				Pixel2D nextPos = getNextPosition(from, dir, map);
+				if (isValidPosition(nextPos, map, obstacleColor)) {
+					return dir;
+				}
 			}
 		}
 		
 		// Fallback: move in general direction (with cyclic support)
+		// Use the wrapped dx/dy we calculated earlier
 		if (Math.abs(dx) > Math.abs(dy)) {
 			int dir = dx > 0 ? Game.RIGHT : Game.LEFT;
 			Pixel2D nextPos = getNextPosition(from, dir, map);
@@ -458,6 +574,15 @@ public class Ex3Algo implements PacManAlgo {
 			}
 		} else if (dy != 0) {
 			int dir = dy > 0 ? Game.UP : Game.DOWN;
+			Pixel2D nextPos = getNextPosition(from, dir, map);
+			if (isValidPosition(nextPos, map, obstacleColor)) {
+				return dir;
+			}
+		}
+		
+		// If still no valid direction, try all directions
+		int[] dirs = {Game.UP, Game.LEFT, Game.DOWN, Game.RIGHT};
+		for (int dir : dirs) {
 			Pixel2D nextPos = getNextPosition(from, dir, map);
 			if (isValidPosition(nextPos, map, obstacleColor)) {
 				return dir;
