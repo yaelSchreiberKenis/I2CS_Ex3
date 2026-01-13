@@ -54,7 +54,7 @@ public class Ex3Algo implements PacManAlgo {
 
 		// Determine state
 		State currentState = determineState(pacmanDistances, ghosts, map);
-		return executeState(pacmanDistances, currentState, pacmanPos, ghosts, map, OBSTACLE_COLOR);
+		return executeState(pacmanDistances, currentState, pacmanPos, ghosts, map);
 	}
 	
 	/**
@@ -70,13 +70,12 @@ public class Ex3Algo implements PacManAlgo {
 	/**
 	 * Executes the behavior for the current state.
 	 */
-	private int executeState(Map2D pacmanDistances, State state, Pixel2D pacmanPos, GhostCL[] ghosts,
-	                        Map map, int obstacleColor) {
+	private int executeState(Map2D pacmanDistances, State state, Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
 		return switch (state) {
-			case CHASE -> chaseVulnerableGhosts(pacmanDistances, pacmanPos, ghosts, map, obstacleColor);
-			case ESCAPE -> escapeFromGhosts(pacmanPos, ghosts, map, obstacleColor);
-			case GET_POWER_PELLET -> getPowerPellet(pacmanDistances, pacmanPos, map, obstacleColor);
-			case EAT_DOTS -> eatDots(pacmanDistances, pacmanPos, map, obstacleColor);
+			case CHASE -> chaseVulnerableGhosts(pacmanDistances, pacmanPos, ghosts, map);
+			case ESCAPE -> escapeFromGhosts(pacmanPos, ghosts, map);
+			case GET_POWER_PELLET -> getPowerPellet(pacmanDistances, pacmanPos, map);
+			case EAT_DOTS -> eatDots(pacmanDistances, pacmanPos, map);
 		};
 	}
 	
@@ -84,8 +83,7 @@ public class Ex3Algo implements PacManAlgo {
 	 * CHASE state: Find and chase the closest vulnerable ghost.
 	 * Avoids chasing ghosts into the spawn area (middle of map).
 	 */
-	private int chaseVulnerableGhosts(Map2D pacmanDistances, Pixel2D pacmanPos, GhostCL[] ghosts,
-	                                  Map map, int obstacleColor) {
+	private int chaseVulnerableGhosts(Map2D pacmanDistances, Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
 		GhostCL bestGhost = null;
 		int bestDist = Integer.MAX_VALUE;
 		
@@ -103,15 +101,15 @@ public class Ex3Algo implements PacManAlgo {
 		}
 
 		assert bestGhost != null;
-		return moveTowardsTarget(pacmanPos, getGhostPosition(bestGhost), map, obstacleColor);
+		return moveTowardsTarget(pacmanPos, getGhostPosition(bestGhost), map);
 	}
 	
 	/**
 	 * ESCAPE state: Choose neighbor that maximizes minimum distance to ghosts.
 	 * Checks if escape direction will trap Pacman.
 	 */
-	private int escapeFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, Map map, int obstacleColor) {
-		List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map, obstacleColor);
+	private int escapeFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
+		List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map);
 		
 		// Get all non-vulnerable ghosts
 		List<Pixel2D> dangerousGhosts = new ArrayList<>();
@@ -128,7 +126,7 @@ public class Ex3Algo implements PacManAlgo {
 		
 		for (Pixel2D neighbor : validNeighbors) {
 			// Calculate safety score for this neighbor
-			Map2D neighborDistances = map.allDistance(neighbor, obstacleColor);
+			Map2D neighborDistances = map.allDistance(neighbor, OBSTACLE_COLOR);
 			
 			// Find minimum distance to any ghost from this neighbor
 			int minDist = Integer.MAX_VALUE;
@@ -149,10 +147,10 @@ public class Ex3Algo implements PacManAlgo {
 			boolean willBeTrapped = false;
 			if (minDist <= 2) {
 				// If we'll be very close to a ghost, check if we can escape further
-				List<Pixel2D> futureNeighbors = getValidNeighbors(neighbor, map, obstacleColor);
+				List<Pixel2D> futureNeighbors = getValidNeighbors(neighbor, map);
 				int futureMinDist = Integer.MAX_VALUE;
 				for (Pixel2D futureNeighbor : futureNeighbors) {
-					Map2D futureDistances = map.allDistance(futureNeighbor, obstacleColor);
+					Map2D futureDistances = map.allDistance(futureNeighbor, OBSTACLE_COLOR);
 					for (Pixel2D ghostPos : dangerousGhosts) {
 						int dist = futureDistances.getPixel(ghostPos);
 						if (dist < futureMinDist) {
@@ -188,7 +186,7 @@ public class Ex3Algo implements PacManAlgo {
 	 * GET_POWER_PELLET state: Find and move towards the closest power pellet.
 	 * Only used when there are non-vulnerable ghosts or ghosts becoming non-vulnerable soon.
 	 */
-	private int getPowerPellet(Map2D pacmanDistances, Pixel2D pacmanPos, Map map, int obstacleColor) {
+	private int getPowerPellet(Map2D pacmanDistances, Pixel2D pacmanPos, Map map) {
 		// Find the closest power pellet (reuse pacmanDistances already calculated above)
 		Pixel2D bestPellet = null;
 		int bestDist = Integer.MAX_VALUE;
@@ -208,7 +206,7 @@ public class Ex3Algo implements PacManAlgo {
 		}
 
 		assert bestPellet != null;
-		return moveTowardsTarget(pacmanPos, bestPellet, map, obstacleColor);
+		return moveTowardsTarget(pacmanPos, bestPellet, map);
 	}
 	
 	/**
@@ -216,7 +214,7 @@ public class Ex3Algo implements PacManAlgo {
 	 * Properly handles cyclic movement.
 	 * Also checks for nearby power pellets (pink) and prioritizes them.
 	 */
-	private int eatDots(Map2D pacmanDistances, Pixel2D pacmanPos, Map map, int obstacleColor) {
+	private int eatDots(Map2D pacmanDistances, Pixel2D pacmanPos, Map map) {
 		Pixel2D bestDot = null;
 		int bestDist = Integer.MAX_VALUE;
 		
@@ -236,14 +234,14 @@ public class Ex3Algo implements PacManAlgo {
 		}
 
 		assert bestDot != null;
-		return moveTowardsTarget(pacmanPos, bestDot, map, obstacleColor);
+		return moveTowardsTarget(pacmanPos, bestDot, map);
 	}
 	
 	/**
 	 * Moves towards a target position, returning the first step direction.
 	 */
-	private int moveTowardsTarget(Pixel2D from, Pixel2D to, Map map, int obstacleColor) {
-		Pixel2D[] path = map.shortestPath(from, to, obstacleColor);
+	private int moveTowardsTarget(Pixel2D from, Pixel2D to, Map map) {
+		Pixel2D[] path = map.shortestPath(from, to, OBSTACLE_COLOR);
 		assert path != null;
 		Pixel2D nextStep = path[1];
 		return getDirection(from, nextStep, map.isCyclic());
@@ -267,7 +265,7 @@ public class Ex3Algo implements PacManAlgo {
 	/**
 	 * Gets all valid neighbors of a position.
 	 */
-	private List<Pixel2D> getValidNeighbors(Pixel2D pos, Map map, int obstacleColor) {
+	private List<Pixel2D> getValidNeighbors(Pixel2D pos, Map map) {
 		List<Pixel2D> validNeighbors = new ArrayList<>();
 		int[] dx = {0, -1, 0, 1};
 		int[] dy = {1, 0, -1, 0};
@@ -288,7 +286,7 @@ public class Ex3Algo implements PacManAlgo {
 			Pixel2D neighbor = new Index2D(x, y);
 			int cellValue = map.getPixel(neighbor);
 			
-			if (cellValue != -1 && cellValue != obstacleColor) {
+			if (cellValue != -1 && cellValue != OBSTACLE_COLOR) {
 				validNeighbors.add(neighbor);
 			}
 		}
