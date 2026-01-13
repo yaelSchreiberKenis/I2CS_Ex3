@@ -16,10 +16,10 @@ public class GameState {
     private boolean cyclicMode;
     
     // Game constants
-    private static final int EMPTY = 0;
-    private static final int WALL = -1;
-    private static final int DOT = 1;
-    private static final int POWER_PELLET = 2;
+    public static final int EMPTY = 0;
+    public static final int WALL = -1;
+    public static final int DOT = 1;
+    public static final int POWER_PELLET = 2;
     
     public GameState(int width, int height, boolean cyclic) {
         this.board = new int[width][height];
