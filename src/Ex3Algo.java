@@ -22,7 +22,7 @@ public class Ex3Algo implements PacManAlgo {
 	}
 	
 	// Constants
-	private static final int DANGER_THRESHOLD = 4;  // Distance threshold for immediate danger
+	private static final int DANGER_THRESHOLD = 5;  // Distance threshold for immediate danger
 	private static final int CHASE_THRESHOLD = 2;  // Max distance to chase vulnerable ghosts
 	private static final int OBSTACLE_COLOR = Game.getIntColor(Color.BLUE, 0);
 	private static final int DOT_COLOR = Game.getIntColor(Color.PINK, 0);
