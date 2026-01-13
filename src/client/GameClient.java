@@ -4,7 +4,7 @@ import server.PacmanGameServer;
 import server.PacmanGameInterface;
 import server.GhostInterface;
 import server.GameState;
-import exe.ex3.game.StdDraw;
+import server.StdDraw;
 import java.awt.Color;
 
 /**
