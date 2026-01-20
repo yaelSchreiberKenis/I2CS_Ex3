@@ -1,17 +1,18 @@
-import exe.ex3.game.Game;
-import exe.ex3.game.GhostCL;
-import exe.ex3.game.PacManAlgo;
-import exe.ex3.game.PacmanGame;
+import server.Game;
+import server.GhostCL;
+import server.PacmanGame;
 
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
+import java.util.Comparator;
 
 /**
  * FSM-based Pacman algorithm that maximizes score while minimizing death risk.
  * Uses BFS for distance calculations and simple heuristics for movement.
  */
-public class Ex3Algo implements PacManAlgo {
+public class Ex3Algo implements server.PacManAlgo {
 
 	// FSM States
 	private enum State {
@@ -54,6 +55,7 @@ public class Ex3Algo implements PacManAlgo {
 
 		// Determine state
 		State currentState = determineState(pacmanDistances, ghosts, map);
+		System.out.println(currentState);
 		return executeState(pacmanDistances, currentState, pacmanPos, ghosts, map);
 	}
 	
@@ -75,7 +77,7 @@ public class Ex3Algo implements PacManAlgo {
 			case CHASE -> chaseVulnerableGhosts(pacmanDistances, pacmanPos, ghosts, map);
 			case ESCAPE -> escapeFromGhosts(pacmanPos, ghosts, map);
 			case GET_POWER_PELLET -> getPowerPellet(pacmanDistances, pacmanPos, map);
-			case EAT_DOTS -> eatDots(pacmanDistances, pacmanPos, map);
+			case EAT_DOTS -> eatDots(pacmanDistances, pacmanPos, ghosts, map);
 		};
 	}
 	
@@ -101,12 +103,17 @@ public class Ex3Algo implements PacManAlgo {
 		}
 
 		assert bestGhost != null;
+		if (bestGhost == null)
+		{
+			System.out.println("In chaseVulnerableGhosts function");
+		}
 		return moveTowardsTarget(pacmanPos, getGhostPosition(bestGhost), map);
 	}
 	
 	/**
 	 * ESCAPE state: Choose neighbor that maximizes minimum distance to ghosts.
-	 * Checks if escape direction will trap Pacman.
+	 * Prevents going to "stuck" places (where only move is back to current).
+	 * When multiple equally safe directions, prefers one closer to a dot.
 	 */
 	private int escapeFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
 		List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map);
@@ -120,11 +127,26 @@ public class Ex3Algo implements PacManAlgo {
 		}
 		assert !dangerousGhosts.isEmpty();
 
-		// Find the best escape direction
-		int bestDir = Game.UP;
-		double bestScore = Double.NEGATIVE_INFINITY;
-		
+		// Filter out "stuck" neighbors (where only possible next move is back to current)
+		List<Pixel2D> nonStuckNeighbors = new ArrayList<>();
 		for (Pixel2D neighbor : validNeighbors) {
+			if (!isStuckPlace(neighbor, pacmanPos, map)) {
+				nonStuckNeighbors.add(neighbor);
+			}
+		}
+		
+		// If all neighbors are stuck, use all neighbors (better than nothing)
+		if (nonStuckNeighbors.isEmpty()) {
+			nonStuckNeighbors = validNeighbors;
+		}
+
+		// Find the best escape direction
+		Pixel2D bestNeighbor = null;
+		int bestMinDist = -1;
+		double bestAvgDist = -1;
+		int bestDotDist = Integer.MAX_VALUE;
+		
+		for (Pixel2D neighbor : nonStuckNeighbors) {
 			// Calculate safety score for this neighbor
 			Map2D neighborDistances = map.allDistance(neighbor, OBSTACLE_COLOR);
 			
@@ -142,44 +164,80 @@ public class Ex3Algo implements PacManAlgo {
 				count++;
 			}
 			
-			// Check if this neighbor will lead to being trapped
-			// Look ahead: check if from this neighbor, we can escape further
-			boolean willBeTrapped = false;
-			if (minDist <= 2) {
-				// If we'll be very close to a ghost, check if we can escape further
-				List<Pixel2D> futureNeighbors = getValidNeighbors(neighbor, map);
-				int futureMinDist = Integer.MAX_VALUE;
-				for (Pixel2D futureNeighbor : futureNeighbors) {
-					Map2D futureDistances = map.allDistance(futureNeighbor, OBSTACLE_COLOR);
-					for (Pixel2D ghostPos : dangerousGhosts) {
-						int dist = futureDistances.getPixel(ghostPos);
-						if (dist < futureMinDist) {
-							futureMinDist = dist;
-						}
+			double avgDist = count > 0 ? sumDist / (double)count : 0;
+			
+			// Check if this is better than current best
+			boolean isBetter = false;
+			if (minDist > bestMinDist) {
+				isBetter = true;
+			} else if (minDist == bestMinDist) {
+				if (avgDist > bestAvgDist) {
+					isBetter = true;
+				} else if (avgDist == bestAvgDist) {
+					// Equally safe - prefer direction closer to a dot
+					int dotDist = getDistanceToClosestDot(neighbor, map);
+					if (dotDist < bestDotDist) {
+						isBetter = true;
 					}
 				}
-				// If future positions are also dangerous, we might be trapped
-				if (futureMinDist <= 1) {
-					willBeTrapped = true;
-				}
 			}
 			
-			if (willBeTrapped) {
-				continue;  // Skip this direction, it leads to a trap
-			}
-			
-			// Calculate score: prefer higher minimum distance and higher average distance
-			double avgDist = sumDist / (double)count;
-			double score = minDist * 2.0 + avgDist * 0.5;  // Weight minimum distance more
-			
-			// Prefer directions that increase distance from all ghosts
-			if (score > bestScore) {
-				bestScore = score;
-				bestDir = getDirection(pacmanPos, neighbor, map.isCyclic());
+			if (isBetter) {
+				bestMinDist = minDist;
+				bestAvgDist = avgDist;
+				bestNeighbor = neighbor;
+				bestDotDist = getDistanceToClosestDot(neighbor, map);
 			}
 		}
 
-		return bestDir;
+		if (bestNeighbor == null) {
+			// Fallback
+			bestNeighbor = nonStuckNeighbors.isEmpty() ? validNeighbors.get(0) : nonStuckNeighbors.get(0);
+		}
+		
+		return getDirection(pacmanPos, bestNeighbor, map.isCyclic());
+	}
+	
+	/**
+	 * Checks if a place is "stuck" - where the only possible next move is back to the current position.
+	 */
+	private boolean isStuckPlace(Pixel2D place, Pixel2D currentPos, Map map) {
+		List<Pixel2D> neighbors = getValidNeighbors(place, map);
+		
+		// If there's only one neighbor and it's the current position, we're stuck
+		if (neighbors.size() == 1 && neighbors.get(0).equals(currentPos)) {
+			return true;
+		}
+		
+		// If there are no neighbors (shouldn't happen for valid positions), we're stuck
+		if (neighbors.isEmpty()) {
+			return true;
+		}
+		
+		return false;
+	}
+	
+	/**
+	 * Gets the distance to the closest dot from a position.
+	 */
+	private int getDistanceToClosestDot(Pixel2D pos, Map map) {
+		Map2D distances = map.allDistance(pos, OBSTACLE_COLOR);
+		int minDist = Integer.MAX_VALUE;
+		
+		for (int x = 0; x < map.getWidth(); x++) {
+			for (int y = 0; y < map.getHeight(); y++) {
+				int cellValue = map.getPixel(x, y);
+				if (cellValue == DOT_COLOR) {
+					Pixel2D dotPos = new Index2D(x, y);
+					int dist = distances.getPixel(dotPos);
+					if (dist > 0 && dist < minDist) {
+						minDist = dist;
+					}
+				}
+			}
+		}
+		
+		return minDist == Integer.MAX_VALUE ? Integer.MAX_VALUE : minDist;
 	}
 	
 	/**
@@ -211,30 +269,130 @@ public class Ex3Algo implements PacManAlgo {
 	
 	/**
 	 * EAT_DOTS state: Find and move towards the closest dot.
-	 * Properly handles cyclic movement.
-	 * Also checks for nearby power pellets (pink) and prioritizes them.
+	 * Sorts dots by distance, checks for vulnerable ghosts on path (distance 2).
+	 * If all dots have vulnerable ghosts on path, goes to farthest place from ghosts.
 	 */
-	private int eatDots(Map2D pacmanDistances, Pixel2D pacmanPos, Map map) {
-		Pixel2D bestDot = null;
-		int bestDist = Integer.MAX_VALUE;
-		
-		// Search for dots (pink cells)
+	private int eatDots(Map2D pacmanDistances, Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
+		// Collect all dots with their distances
+		List<DotInfo> dots = new ArrayList<>();
 		for (int x = 0; x < map.getWidth(); x++) {
 			for (int y = 0; y < map.getHeight(); y++) {
 				int cellValue = map.getPixel(x, y);
 				if (cellValue == DOT_COLOR) {
 					Pixel2D dotPos = new Index2D(x, y);
 					int distance = pacmanDistances.getPixel(dotPos);
-					if (distance > 0 && distance < bestDist) {
-						bestDist = distance;
-						bestDot = dotPos;
+					if (distance > 0) {
+						dots.add(new DotInfo(dotPos, distance));
 					}
 				}
 			}
 		}
-
-		assert bestDot != null;
-		return moveTowardsTarget(pacmanPos, bestDot, map);
+		
+		if (dots.isEmpty()) {
+			// No dots found, return a default direction
+			return Game.UP;
+		}
+		
+		// Sort dots by distance (closest first)
+		Collections.sort(dots, Comparator.comparingInt(d -> d.distance));
+		
+		// Check each dot from closest to farthest
+		for (DotInfo dotInfo : dots) {
+			Pixel2D dotPos = dotInfo.position;
+			Pixel2D[] path = map.shortestPath(pacmanPos, dotPos, OBSTACLE_COLOR);
+			
+			if (path == null || path.length == 0) {
+				continue; // No path to this dot
+			}
+			
+			// Check if there's a vulnerable ghost within distance 2 on the path
+			boolean hasVulnerableGhostOnPath = false;
+			for (GhostCL ghost : ghosts) {
+				if (isVulnerable(ghost)) {
+					Pixel2D ghostPos = getGhostPosition(ghost);
+					
+					// Check if ghost is on the path within distance 2 from Pacman
+					// path[0] is Pacman's position, path[1] is first step, etc.
+					for (int i = 0; i < path.length && i <= 2; i++) {
+						if (path[i].equals(ghostPos)) {
+							hasVulnerableGhostOnPath = true;
+							break;
+						}
+					}
+					if (hasVulnerableGhostOnPath) {
+						break;
+					}
+				}
+			}
+			
+			// If no vulnerable ghost on path, pick this dot
+			if (!hasVulnerableGhostOnPath) {
+				return moveTowardsTarget(pacmanPos, dotPos, map);
+			}
+		}
+		
+		// All dots have vulnerable ghosts on path - go to farthest place from ghosts
+		return goToFarthestFromGhosts(pacmanPos, ghosts, map);
+	}
+	
+	/**
+	 * Helper class to store dot position and distance.
+	 */
+	private static class DotInfo {
+		Pixel2D position;
+		int distance;
+		
+		DotInfo(Pixel2D position, int distance) {
+			this.position = position;
+			this.distance = distance;
+		}
+	}
+	
+	/**
+	 * Goes to the farthest place from all ghosts.
+	 */
+	private int goToFarthestFromGhosts(Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
+		List<Pixel2D> validNeighbors = getValidNeighbors(pacmanPos, map);
+		
+		if (validNeighbors.isEmpty()) {
+			return Game.UP; // Fallback
+		}
+		
+		// Get all non-vulnerable ghosts
+		List<Pixel2D> dangerousGhosts = new ArrayList<>();
+		for (GhostCL ghost : ghosts) {
+			if (!isVulnerable(ghost)) {
+				dangerousGhosts.add(getGhostPosition(ghost));
+			}
+		}
+		
+		Pixel2D bestNeighbor = null;
+		int maxMinDist = -1;
+		
+		for (Pixel2D neighbor : validNeighbors) {
+			Map2D neighborDistances = map.allDistance(neighbor, OBSTACLE_COLOR);
+			
+			// Find minimum distance to any ghost from this neighbor
+			int minDist = Integer.MAX_VALUE;
+			for (Pixel2D ghostPos : dangerousGhosts) {
+				int dist = neighborDistances.getPixel(ghostPos);
+				if (dist < minDist) {
+					minDist = dist;
+				}
+			}
+			
+			// Prefer neighbor with maximum minimum distance
+			if (minDist > maxMinDist) {
+				maxMinDist = minDist;
+				bestNeighbor = neighbor;
+			}
+		}
+		
+		if (bestNeighbor == null) {
+			bestNeighbor = validNeighbors.get(0); // Fallback
+		}
+		
+		return getDirection(pacmanPos, bestNeighbor, map.isCyclic());
 	}
 	
 	/**
@@ -242,6 +400,12 @@ public class Ex3Algo implements PacManAlgo {
 	 */
 	private int moveTowardsTarget(Pixel2D from, Pixel2D to, Map map) {
 		Pixel2D[] path = map.shortestPath(from, to, OBSTACLE_COLOR);
+		if (path == null)
+		{
+			System.out.println("from = " + from.toString());
+			System.out.println("to = " + to.toString());
+			return Game.UP;
+		}
 		assert path != null;
 		Pixel2D nextStep = path[1];
 		return getDirection(from, nextStep, map.isCyclic());
@@ -299,7 +463,7 @@ public class Ex3Algo implements PacManAlgo {
 	 */
 	private boolean isVulnerable(GhostCL ghost) {
 		// The 0.5 is for safety
-		return ghost.remainTimeAsEatable(0) > 0.5;
+		return ghost.remainTimeAsEatable(0) > 40;
 	}
 	
 	/**

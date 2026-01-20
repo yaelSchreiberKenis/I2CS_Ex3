@@ -20,5 +20,7 @@
         <SOURCES />
       </library>
     </orderEntry>
+    <orderEntry type="library" name="Ex3_v09e.jar-out (2)" level="project" />
+    <orderEntry type="library" name="Ex3_my_server.jar-out" level="project" />
   </component>
 </module>

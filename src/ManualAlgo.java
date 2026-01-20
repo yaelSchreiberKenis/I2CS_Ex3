@@ -1,7 +1,7 @@
-import exe.ex3.game.PacManAlgo;
-import exe.ex3.game.PacmanGame;
+import server.PacManAlgo;
+import server.PacmanGame;
 
-public class ManualAlgo implements PacManAlgo{
+public class ManualAlgo implements server.PacManAlgo {
     public ManualAlgo() {;}
     @Override
     public String getInfo() {
@@ -9,14 +9,14 @@ public class ManualAlgo implements PacManAlgo{
     }
 
     @Override
-    public int move(PacmanGame game) {
-        int ans = PacmanGame.ERR;
+    public int move(server.PacmanGame game) {
+        int ans = server.PacmanGame.ERR;
         Character cmd = Ex3Main.getCMD();
             if (cmd != null) {
-                if (cmd == 'w') {ans = PacmanGame.UP;}
-                if (cmd == 'x') {ans = PacmanGame.DOWN;}
-                if (cmd == 'a') {ans = PacmanGame.LEFT;}
-                if (cmd == 'd') {ans = PacmanGame.RIGHT;}
+                if (cmd == 'w') {ans = server.PacmanGame.UP;}
+                if (cmd == 'x') {ans = server.PacmanGame.DOWN;}
+                if (cmd == 'a') {ans = server.PacmanGame.LEFT;}
+                if (cmd == 'd') {ans = server.PacmanGame.RIGHT;}
             }
             return  ans;
     }

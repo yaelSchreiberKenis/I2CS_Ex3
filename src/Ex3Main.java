@@ -1,6 +1,6 @@
-import exe.ex3.game.Game;
-import exe.ex3.game.PacManAlgo;
-import exe.ex3.game.PacmanGame;
+import server.Game;
+import server.PacManAlgo;
+import server.PacmanGame;
 
 /**
  * Ex3, School of Computer Science, Ariel University.
@@ -29,13 +29,8 @@ public class Ex3Main {
     	Game ex3 = new Game();//new Game(level);
     	ex3.init(GameInfo.CASE_SCENARIO, GameInfo.MY_ID, GameInfo.CYCLIC_MODE, GameInfo.RANDOM_SEED, GameInfo.RESOLUTION_NORM, GameInfo.DT, -1);
         PacManAlgo man = GameInfo.ALGO;
-        while(ex3.getStatus()!=PacmanGame.DONE) {
-            _cmd = ex3.getKeyChar();
-            if(_cmd !=null && _cmd == ' ') {ex3.play();}
-            if (_cmd != null && _cmd == 'h') {
-            	System.out.println("Pacman help: keys: ' '-start, 'w,a,x,d'-directions, all other parameters should be configured via GameInfo.java, ");
-            }
-            int  dir = man.move(ex3);
+        while(ex3.getStatus()!=server.PacmanGame.DONE) {
+            int dir = man.move(ex3);
             ex3.move(dir);
         }
         ex3.end(-1);

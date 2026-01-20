@@ -1,8 +1,9 @@
+package server;
+
 /**
- * Interface for Pacman game - matches the original PacmanGame interface
- * Used by game algorithms to interact with the game
+ * Interface for Pacman game - used by Ex3Main and Ex3Algo
  */
-public interface PacmanGameInterface {
+public interface PacmanGame {
     // Direction constants
     int UP = 0;
     int LEFT = 1;
@@ -20,34 +21,26 @@ public interface PacmanGameInterface {
     
     /**
      * Gets the game board as a 2D integer array
-     * @param code player/entity code
-     * @return 2D array representing the game board
      */
     int[][] getGame(int code);
     
     /**
      * Gets the position of an entity as "x,y" string
-     * @param code entity code (0 for Pacman)
-     * @return position string "x,y"
      */
     String getPos(int code);
     
     /**
      * Gets all ghosts in the game
-     * @param code player code
-     * @return array of ghost objects
      */
-    GhostInterface[] getGhosts(int code);
+    GhostCL[] getGhosts(int code);
     
     /**
      * Gets the current game status
-     * @return status constant (NOT_STARTED, RUNNING, PAUSED, DONE, etc.)
      */
     int getStatus();
     
     /**
      * Moves an entity in the given direction
-     * @param dir direction (UP, DOWN, LEFT, RIGHT)
      */
     void move(int dir);
     
@@ -58,13 +51,6 @@ public interface PacmanGameInterface {
     
     /**
      * Ends the game
-     * @param code exit code
      */
     void end(int code);
-    
-    /**
-     * Gets the last pressed key character
-     * @return key character or null
-     */
-    Character getKeyChar();
 }

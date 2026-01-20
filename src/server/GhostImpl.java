@@ -1,16 +1,18 @@
+package server;
+
 /**
  * Implementation of GhostInterface
  * Represents a ghost entity in the Pacman game
  */
-public class GhostImpl implements GhostInterface {
+public class GhostImpl implements GhostInterface, GhostCL {
     private int x;
     private int y;
-    private double vulnerableTime; // Time remaining as vulnerable (eatable)
+    private GameState gameState; // Reference to game state for shared vulnerability timer
     
-    public GhostImpl(int x, int y) {
+    public GhostImpl(int x, int y, GameState gameState) {
         this.x = x;
         this.y = y;
-        this.vulnerableTime = 0;
+        this.gameState = gameState;
     }
     
     @Override
@@ -20,7 +22,7 @@ public class GhostImpl implements GhostInterface {
     
     @Override
     public double remainTimeAsEatable(int code) {
-        return vulnerableTime;
+        return gameState.getSharedVulnerableTime();
     }
     
     public int getX() {
@@ -36,17 +38,11 @@ public class GhostImpl implements GhostInterface {
         this.y = y;
     }
     
-    public void setVulnerableTime(double time) {
-        this.vulnerableTime = time;
-    }
-    
-    public void updateVulnerableTime(double deltaTime) {
-        if (vulnerableTime > 0) {
-            vulnerableTime = Math.max(0, vulnerableTime - deltaTime);
-        }
+    public void setVulnerableTime(double moves) {
+        gameState.setSharedVulnerableTime(moves);
     }
     
     public boolean isVulnerable() {
-        return vulnerableTime > 0;
+        return gameState.getSharedVulnerableTime() > 0;
     }
 }

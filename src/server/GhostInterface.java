@@ -1,3 +1,5 @@
+package server;
+
 /**
  * Interface for ghost entities in the game
  */
