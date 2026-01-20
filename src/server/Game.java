@@ -168,9 +168,9 @@ public class Game implements PacmanGame {
             } else if (cell == GameState.POWER_PELLET) {
                 gameState.setCell(newX, newY, GameState.EMPTY);
                 gameState.addScore(POWER_PELLET_SCORE);
-                // Make all ghosts vulnerable for 50 moves
+                // Make all ghosts vulnerable for 100 moves
                 for (GhostImpl ghost : gameState.getGhosts()) {
-                    ghost.setVulnerableTime(130.0); // 50 moves
+                    ghost.setVulnerableTime(100);
                 }
             }
         }
@@ -228,12 +228,9 @@ public class Game implements PacmanGame {
         int pacX = gameState.getPacmanX();
         int pacY = gameState.getPacmanY();
         
-        // Create Map for pathfinding (only once per move)
-        int[][] board = gameState.getBoard();
-        Object map = createMapFromBoard(board);
-        
-        // Move probability for smart ghost = scenario * 25% (0-100%)
-        double smartGhostProbability = scenario * 0.15;
+        // Smart movement probability based on scenario level (0-4)
+        // Level 0: 5%, Level 1: 10%, Level 2: 15%, Level 3: 20%, Level 4: 25%
+        double smartProbability = 0.05 + (scenario * 0.05);
         
         List<GhostImpl> ghosts = gameState.getGhosts();
         for (int i = 0; i < ghosts.size(); i++) {
@@ -241,95 +238,102 @@ public class Game implements PacmanGame {
             int ghostX = ghost.getX();
             int ghostY = ghost.getY();
             
-            boolean shouldMove = false;
-            int newX = ghostX;
-            int newY = ghostY;
-            
-            if (i == 0) {
-                // First ghost (index 0) is smart - chase Pacman using shortest path
-                if (map != null && random.nextDouble() < smartGhostProbability) {
-                    try {
-                        // Calculate shortest path using Map via reflection
-                        Class<?> index2DClass = Class.forName("Index2D");
-                        Object ghostPos = index2DClass.getConstructor(int.class, int.class).newInstance(ghostX, ghostY);
-                        Object pacmanPos = index2DClass.getConstructor(int.class, int.class).newInstance(pacX, pacY);
-                        
-                        Class<?> pixel2DClass = Class.forName("Pixel2D");
-                        java.lang.reflect.Method shortestPathMethod = map.getClass().getMethod("shortestPath", 
-                            pixel2DClass, pixel2DClass, int.class);
-                        Object[] path = (Object[])shortestPathMethod.invoke(map, ghostPos, pacmanPos, GameState.WALL);
-                        
-                        if (path != null && path.length > 1) {
-                            // Get next step from path
-                            Object nextStep = path[1];
-                            java.lang.reflect.Method getXMethod = pixel2DClass.getMethod("getX");
-                            java.lang.reflect.Method getYMethod = pixel2DClass.getMethod("getY");
-                            newX = (Integer)getXMethod.invoke(nextStep);
-                            newY = (Integer)getYMethod.invoke(nextStep);
-                            shouldMove = true;
-                        }
-                    } catch (Exception e) {
-                        // If pathfinding fails, don't move
+            // All ghosts can be smart, but with probability based on level
+            if (random.nextDouble() < smartProbability) {
+                // Smart move: use BFS to find direction towards Pacman
+                int[] nextMove = findNextStepTowardsPacman(ghostX, ghostY, pacX, pacY);
+                if (nextMove != null) {
+                    int newX = nextMove[0];
+                    int newY = nextMove[1];
+                    if (gameState.isValidPosition(newX, newY) && 
+                        gameState.getCell(newX, newY) != GameState.WALL) {
+                        ghost.setPosition(newX, newY);
+                        continue;
                     }
-                }
-            } else {
-                // Other ghosts (indices 1,2,3) move randomly
-                if (random.nextDouble() < GHOST_MOVE_PROBABILITY) {
-                    int dir = random.nextInt(4);
-                    int dx = 0, dy = 0;
-                    switch (dir) {
-                        case 0: dy = 1; break;  // UP (increases y)
-                        case 1: dy = -1; break; // DOWN (decreases y)
-                        case 2: dx = -1; break; // LEFT
-                        case 3: dx = 1; break;  // RIGHT
-                    }
-                    
-                    newX = gameState.wrapX(ghostX + dx);
-                    newY = gameState.wrapY(ghostY + dy);
-                    shouldMove = true;
                 }
             }
             
-            // Apply move if valid
-            if (shouldMove && gameState.isValidPosition(newX, newY) && 
-                gameState.getCell(newX, newY) != GameState.WALL) {
-                ghost.setPosition(newX, newY);
+            // Random move (when not being smart or smart move failed)
+            if (random.nextDouble() < GHOST_MOVE_PROBABILITY) {
+                int dir = random.nextInt(4);
+                int dx = 0, dy = 0;
+                switch (dir) {
+                    case 0: dy = 1; break;  // UP
+                    case 1: dy = -1; break; // DOWN
+                    case 2: dx = -1; break; // LEFT
+                    case 3: dx = 1; break;  // RIGHT
+                }
+                
+                int newX = gameState.wrapX(ghostX + dx);
+                int newY = gameState.wrapY(ghostY + dy);
+                
+                if (gameState.isValidPosition(newX, newY) && 
+                    gameState.getCell(newX, newY) != GameState.WALL) {
+                    ghost.setPosition(newX, newY);
+                }
             }
         }
     }
     
     /**
-     * Creates a Map instance from the game board, similar to Ex3Algo.
-     * Uses reflection to access default package classes.
+     * Simple BFS to find next step towards Pacman (game-specific pathfinding).
+     * Returns [newX, newY] or null if no path found.
      */
-    private Object createMapFromBoard(int[][] board) {
-        try {
-            // Transpose board: board[x][y] -> transposedBoard[y][x]
-            // Map stores as _map[y][x] and getPixel(x,y) returns _map[y][x]
-            int width = board.length;
-            int height = board[0].length;
-            int[][] transposedBoard = new int[height][width];
-            for (int x = 0; x < width; x++) {
-                for (int y = 0; y < height; y++) {
-                    transposedBoard[y][x] = board[x][y];
+    private int[] findNextStepTowardsPacman(int fromX, int fromY, int toX, int toY) {
+        if (fromX == toX && fromY == toY) return null;
+        
+        int width = gameState.getWidth();
+        int height = gameState.getHeight();
+        boolean[][] visited = new boolean[width][height];
+        int[][] parentX = new int[width][height];
+        int[][] parentY = new int[width][height];
+        
+        Queue<int[]> queue = new LinkedList<>();
+        queue.offer(new int[]{fromX, fromY});
+        visited[fromX][fromY] = true;
+        parentX[fromX][fromY] = -1;
+        parentY[fromX][fromY] = -1;
+        
+        int[][] dirs = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
+        
+        while (!queue.isEmpty()) {
+            int[] curr = queue.poll();
+            int cx = curr[0], cy = curr[1];
+            
+            if (cx == toX && cy == toY) {
+                // Backtrack to find first step
+                int pathX = cx, pathY = cy;
+                while (parentX[pathX][pathY] != fromX || parentY[pathX][pathY] != fromY) {
+                    int px = parentX[pathX][pathY];
+                    int py = parentY[pathX][pathY];
+                    if (px == -1) break;
+                    pathX = px;
+                    pathY = py;
                 }
+                return new int[]{pathX, pathY};
             }
             
-            // Use reflection to create Map instance (default package)
-            Class<?> mapClass = Class.forName("Map");
-            java.lang.reflect.Constructor<?> mapConstructor = mapClass.getConstructor(int[][].class);
-            Object mapObj = mapConstructor.newInstance((Object)transposedBoard);
-            
-            // Set cyclic mode
-            java.lang.reflect.Method setCyclicMethod = mapClass.getMethod("setCyclic", boolean.class);
-            setCyclicMethod.invoke(mapObj, gameState.isCyclicMode());
-            
-            return mapObj;
-        } catch (Exception e) {
-            // If Map class not found, return null (fall back to random movement)
-            return null;
+            for (int[] d : dirs) {
+                int nx = gameState.wrapX(cx + d[0]);
+                int ny = gameState.wrapY(cy + d[1]);
+                
+                // Check bounds BEFORE accessing arrays to prevent overflow in non-cyclic mode
+                if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+                    continue;
+                }
+                
+                if (!visited[nx][ny] && gameState.isValidPosition(nx, ny) && 
+                    gameState.getCell(nx, ny) != GameState.WALL) {
+                    visited[nx][ny] = true;
+                    parentX[nx][ny] = cx;
+                    parentY[nx][ny] = cy;
+                    queue.offer(new int[]{nx, ny});
+                }
+            }
         }
+        return null;
     }
+    
     
     private boolean allDotsEaten() {
         for (int x = 0; x < gameState.getWidth(); x++) {
@@ -364,9 +368,10 @@ public class Game implements PacmanGame {
     }
     
     // GUI and rendering
-    private static final double TOP_SPACE = 3.0; // Space at top for future use
-    private static final double MARGIN = 2.0; // Margin around the map
-    private static final double IMAGE_SIZE = 0.6; // Size of Pacman and ghost images (much smaller to fit in cell)
+    private static final double TOP_SPACE = 3.0; // Space at top for score/messages
+    private static final double MARGIN = 1.5; // Margin around the map
+    private static final double CELL_SIZE = 0.95; // Size of Pacman and normal ghosts (nearly full cell)
+    private static final double VULNERABLE_GHOST_SIZE = 0.55; // Smaller size for vulnerable ghosts
     
     private void initializeGUI() {
         if (gameState == null) return;
@@ -378,11 +383,13 @@ public class Game implements PacmanGame {
         
         // Set coordinate system with margins around the map
         // Map area: transposed, so width becomes height and height becomes width
-        // Space at top: board is at bottom, space is at top
         int displayWidth = height; // Transposed: original height becomes display width
         int displayHeight = width; // Transposed: original width becomes display height
+        
+        // Adjusted: add more bottom margin to push game up in the UI
+        double bottomMargin = MARGIN + 2.5;
         StdDraw.setXscale(-MARGIN, displayWidth + 2*MARGIN);
-        StdDraw.setYscale(-MARGIN, displayHeight + TOP_SPACE + 2*MARGIN);
+        StdDraw.setYscale(-bottomMargin, displayHeight + TOP_SPACE + MARGIN);
         
         // Enable double buffering for smooth animation
         StdDraw.enableDoubleBuffering();
@@ -413,20 +420,27 @@ public class Game implements PacmanGame {
                 
                 // Draw cell content
                 if (cell == GameState.WALL) {
-                    // Draw blue square outline (empty in middle)
-                    StdDraw.setPenColor(Color.BLUE);
-                    double wall_size = 0.004;
-                    StdDraw.setPenRadius(wall_size);
-                    StdDraw.square(screenX + 0.5, screenY + 0.5, 0.5 - wall_size - 0.1);
-                    StdDraw.setPenRadius(); // Reset to default
+                    // Draw blue filled square with darker border for depth
+                    StdDraw.setPenColor(new Color(0, 0, 139)); // Dark blue fill
+                    StdDraw.filledSquare(screenX + 0.5, screenY + 0.5, 0.45);
+                    StdDraw.setPenColor(new Color(30, 144, 255)); // Lighter blue border
+                    StdDraw.setPenRadius(0.003);
+                    StdDraw.square(screenX + 0.5, screenY + 0.5, 0.45);
+                    StdDraw.setPenRadius();
                 } else if (cell == GameState.DOT) {
-                    // Draw small pink circle in middle of cell
-                    StdDraw.setPenColor(Color.PINK);
-                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.15);
+                    // Draw small glowing dot
+                    StdDraw.setPenColor(new Color(255, 200, 200)); // Light pink glow
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.12);
+                    StdDraw.setPenColor(Color.WHITE);
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.08);
                 } else if (cell == GameState.POWER_PELLET) {
-                    // Draw green big circle in middle of cell
+                    // Draw pulsing power pellet (larger, with glow effect)
+                    StdDraw.setPenColor(new Color(144, 238, 144)); // Light green glow
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.38);
                     StdDraw.setPenColor(Color.GREEN);
-                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.35);
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.30);
+                    StdDraw.setPenColor(new Color(200, 255, 200)); // Bright center
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.15);
                 }
                 // EMPTY cells: just black background
             }
@@ -461,26 +475,23 @@ public class Game implements PacmanGame {
         }
         
         try {
-            // For left direction, we need to mirror. Since StdDraw doesn't support mirroring directly,
-            // we'll use rotation 180 degrees which gives a similar effect (though not perfect mirror)
+            // Draw Pacman at full cell size with appropriate rotation
             if (flipHorizontal) {
-                // Use 180 degree rotation for mirroring effect
-                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "p1.png", IMAGE_SIZE, IMAGE_SIZE, 180.0);
+                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "p1.png", CELL_SIZE, CELL_SIZE, 180.0);
             } else {
-                // Use scaled and rotated image
-                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "p1.png", IMAGE_SIZE, IMAGE_SIZE, pacRotation);
+                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "p1.png", CELL_SIZE, CELL_SIZE, pacRotation);
             }
         } catch (Exception e) {
-            // If image not found, draw yellow circle as fallback
+            // Fallback: draw Pacman as yellow circle with mouth
             StdDraw.setPenColor(Color.YELLOW);
-            StdDraw.filledCircle(pacScreenX + 0.5, pacScreenY + 0.5, IMAGE_SIZE * 0.6);
+            StdDraw.filledCircle(pacScreenX + 0.5, pacScreenY + 0.5, CELL_SIZE * 0.45);
         }
         
         // Draw ghosts
         List<GhostImpl> ghosts = gameState.getGhosts();
         String[] ghostImages = {"g0.png", "g1.png", "g2.png", "g3.png"};
-        double normalGhostSize = 0.75; // Bigger than IMAGE_SIZE but still fits in cell
-        double vulnerableGhostSize = 0.45; // Smaller when vulnerable
+        Color[] ghostColors = {Color.RED, Color.PINK, Color.CYAN, Color.ORANGE}; // Classic ghost colors
+        
         for (int i = 0; i < ghosts.size() && i < 4; i++) {
             GhostImpl ghost = ghosts.get(i);
             int gX = ghost.getX();
@@ -490,41 +501,56 @@ public class Game implements PacmanGame {
             
             // Transpose ghost coordinates: display at (gY, gX)
             double ghostScreenX = gY + MARGIN;
-            double ghostScreenY = gX + MARGIN; // Board at bottom, space at top
+            double ghostScreenY = gX + MARGIN;
             
-            // Determine ghost size based on vulnerability
-            double ghostSize = ghost.isVulnerable() ? vulnerableGhostSize : normalGhostSize;
+            // Ghost size: full cell when normal, smaller when vulnerable
+            double ghostSize = ghost.isVulnerable() ? VULNERABLE_GHOST_SIZE : CELL_SIZE;
             
             try {
-                // Draw scaled ghost images - bigger normally, smaller when vulnerable
-                StdDraw.picture(ghostScreenX + 0.5, ghostScreenY + 0.5, ghostImages[i], ghostSize, ghostSize);
-            } catch (Exception e) {
-                // If image not found, draw colored circle as fallback
                 if (ghost.isVulnerable()) {
-                    StdDraw.setPenColor(Color.BLUE); // Blue when vulnerable
+                    // Draw vulnerable ghost as blue with smaller size
+                    StdDraw.picture(ghostScreenX + 0.5, ghostScreenY + 0.5, ghostImages[i], ghostSize, ghostSize);
+                    // Add blue tint overlay
+                    StdDraw.setPenColor(new Color(0, 0, 255, 100)); // Semi-transparent blue
+                    StdDraw.filledCircle(ghostScreenX + 0.5, ghostScreenY + 0.5, ghostSize * 0.4);
                 } else {
-                    StdDraw.setPenColor(Color.RED);
+                    // Normal ghost at full cell size
+                    StdDraw.picture(ghostScreenX + 0.5, ghostScreenY + 0.5, ghostImages[i], ghostSize, ghostSize);
                 }
-                StdDraw.filledCircle(ghostScreenX + 0.5, ghostScreenY + 0.5, ghostSize * 0.6);
+            } catch (Exception e) {
+                // Fallback: draw ghost as colored circle
+                if (ghost.isVulnerable()) {
+                    StdDraw.setPenColor(Color.BLUE);
+                    StdDraw.filledCircle(ghostScreenX + 0.5, ghostScreenY + 0.5, VULNERABLE_GHOST_SIZE * 0.4);
+                } else {
+                    StdDraw.setPenColor(ghostColors[i]);
+                    StdDraw.filledCircle(ghostScreenX + 0.5, ghostScreenY + 0.5, CELL_SIZE * 0.45);
+                }
             }
         }
         
+        // Draw score at top
+        int displayWidth = height;
+        int displayHeight = width;
+        double centerX = displayWidth / 2.0 + MARGIN;
+        double topY = displayHeight + MARGIN + TOP_SPACE * 0.7;
+        
+        StdDraw.setPenColor(Color.WHITE);
+        StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 18));
+        StdDraw.text(centerX, topY, "Score: " + gameState.getScore());
+        
         // Draw win/lose message above the table if game is done
         if (gameState.getStatus() == PacmanGame.DONE) {
-            // Transposed: original height becomes display width, original width becomes display height
-            int displayWidth = height; // Transposed: original height becomes display width
-            int displayHeight = width; // Transposed: original width becomes display height
-            double centerX = displayWidth / 2.0 + MARGIN;
-            double centerY = displayHeight + MARGIN + TOP_SPACE / 2.0; // Center of top space
+            double msgY = displayHeight + MARGIN + TOP_SPACE * 0.3;
             
-            StdDraw.setPenColor(Color.WHITE);
-            StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 24));
+            StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 28));
             
-            // Check if won (all dots eaten) or lost (collision with ghost)
             if (allDotsEaten()) {
-                StdDraw.text(centerX, centerY, "packman win! :)");
+                StdDraw.setPenColor(Color.GREEN);
+                StdDraw.text(centerX, msgY, "PACMAN WINS! :)");
             } else {
-                StdDraw.text(centerX, centerY, "packman lose :(");
+                StdDraw.setPenColor(Color.RED);
+                StdDraw.text(centerX, msgY, "GAME OVER :(");
             }
         }
         

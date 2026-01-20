@@ -159,7 +159,7 @@ public class Ex3Algo implements server.PacManAlgo {
 	/**
 	 * ESCAPE: Move to the safest neighbor (maximizes distance from ghosts).
 	 * Avoids dead-ends where only exit is back to current position.
-	 * Tie-breaker: prefer direction closer to a dot.
+	 * Tie-breaker: if power pellet exists, prefer closer to it; otherwise closer to dot.
 	 */
 	private int doEscape(Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
 		List<Pixel2D> neighbors = getValidNeighbors(pacmanPos, map);
@@ -169,20 +169,24 @@ public class Ex3Algo implements server.PacManAlgo {
 		List<Pixel2D> safeNeighbors = filterDeadEnds(neighbors, pacmanPos, map);
 		if (safeNeighbors.isEmpty()) safeNeighbors = neighbors;
 
+		// Determine what to prioritize as tie-breaker
+		boolean powerPelletExists = hasPowerPellet(map);
+		int tieBreakColor = powerPelletExists ? POWER_PELLET_COLOR : DOT_COLOR;
+
 		// Find neighbor that maximizes minimum distance to ghosts
 		Pixel2D best = null;
 		int bestMinDist = -1;
-		int bestDotDist = Integer.MAX_VALUE;
+		int bestTieBreakDist = Integer.MAX_VALUE;
 		
 		for (Pixel2D neighbor : safeNeighbors) {
 			int minGhostDist = getMinDistanceToGhosts(neighbor, dangerousGhosts, map);
-			int dotDist = getDistanceToClosest(neighbor, DOT_COLOR, map);
+			int tieBreakDist = getDistanceToClosest(neighbor, tieBreakColor, map);
 			
-			// Better if: farther from ghosts, or same distance but closer to dot
-			if (minGhostDist > bestMinDist || (minGhostDist == bestMinDist && dotDist < bestDotDist)) {
+			// Better if: farther from ghosts, or same distance but closer to tie-breaker target
+			if (minGhostDist > bestMinDist || (minGhostDist == bestMinDist && tieBreakDist < bestTieBreakDist)) {
 				best = neighbor;
 				bestMinDist = minGhostDist;
-				bestDotDist = dotDist;
+				bestTieBreakDist = tieBreakDist;
 			}
 		}
 		
@@ -220,7 +224,7 @@ public class Ex3Algo implements server.PacManAlgo {
 	
 	/**
 	 * EAT_DOTS: Move towards the closest dot.
-	 * If ghosts are vulnerable, avoid stepping on power pellets.
+	 * If ghosts are vulnerable, avoid stepping on power pellets - try alternative paths first.
 	 */
 	private int doEatDots(Map2D distances, Pixel2D pacmanPos, GhostCL[] ghosts, Map map) {
 		boolean avoidPowerPellets = hasVulnerableGhost(ghosts);
@@ -228,41 +232,67 @@ public class Ex3Algo implements server.PacManAlgo {
 		
 		if (target == null) return Game.UP;
 		
-		// Get next step towards target
+		// Get path towards target
 		Pixel2D[] path = map.shortestPath(pacmanPos, target, OBSTACLE_COLOR);
 		if (path == null || path.length < 2) return Game.UP;
 		
 		Pixel2D nextStep = path[1];
 		
-		// If next step is power pellet and we should avoid, find alternative
-		if (avoidPowerPellets && map.getPixel(nextStep) == POWER_PELLET_COLOR) {
-			Pixel2D alternative = findAlternativeStep(pacmanPos, target, map);
+		// If ghosts are vulnerable and path goes through power pellet, try to find alternative
+		if (avoidPowerPellets && pathContainsPowerPellet(path, map)) {
+			// Try to find alternative neighbor that leads to same dot without power pellet
+			Pixel2D alternative = findAlternativePathToDot(pacmanPos, target, map);
 			if (alternative != null) {
 				return getDirection(pacmanPos, alternative, map.isCyclic());
 			}
+			// No alternative path - go through (better than getting stuck)
 		}
 		
 		return getDirection(pacmanPos, nextStep, map.isCyclic());
 	}
-
-	// ==================== HELPER METHODS ====================
 	
-	/** Finds an alternative neighbor that avoids power pellets but still approaches target */
-	private Pixel2D findAlternativeStep(Pixel2D from, Pixel2D target, Map map) {
+	/** Checks if path contains any power pellet */
+	private boolean pathContainsPowerPellet(Pixel2D[] path, Map map) {
+		for (int i = 1; i < path.length; i++) {
+			if (map.getPixel(path[i]) == POWER_PELLET_COLOR) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	/** Finds alternative neighbor that leads to dot without going through power pellet */
+	private Pixel2D findAlternativePathToDot(Pixel2D from, Pixel2D target, Map map) {
 		Pixel2D best = null;
 		int bestDist = Integer.MAX_VALUE;
 		
 		for (Pixel2D neighbor : getValidNeighbors(from, map)) {
-			if (map.getPixel(neighbor) != POWER_PELLET_COLOR) {
-				int dist = map.allDistance(neighbor, OBSTACLE_COLOR).getPixel(target);
-				if (dist > 0 && dist < bestDist) {
-					bestDist = dist;
-					best = neighbor;
+			// Skip if neighbor itself is a power pellet
+			if (map.getPixel(neighbor) == POWER_PELLET_COLOR) continue;
+			
+			// Check path from this neighbor to target
+			Pixel2D[] altPath = map.shortestPath(neighbor, target, OBSTACLE_COLOR);
+			if (altPath == null) continue;
+			
+			// Check if this alternative path avoids power pellets
+			boolean hasPowerPellet = false;
+			for (int i = 0; i < altPath.length; i++) {
+				if (map.getPixel(altPath[i]) == POWER_PELLET_COLOR) {
+					hasPowerPellet = true;
+					break;
 				}
+			}
+			
+			if (!hasPowerPellet && altPath.length < bestDist) {
+				bestDist = altPath.length;
+				best = neighbor;
 			}
 		}
 		return best;
 	}
+
+	// ==================== HELPER METHODS ====================
+	
 	
 	/** Filters out dead-end neighbors (where only exit is back to current position) */
 	private List<Pixel2D> filterDeadEnds(List<Pixel2D> neighbors, Pixel2D current, Map map) {
