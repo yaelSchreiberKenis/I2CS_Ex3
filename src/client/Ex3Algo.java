@@ -1,3 +1,5 @@
+package client;
+
 import server.Game;
 import server.GhostCL;
 import server.PacmanGame;

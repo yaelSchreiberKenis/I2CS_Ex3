@@ -488,9 +488,9 @@ public class Game implements PacmanGame {
         try {
             // Draw Pacman at full cell size with appropriate rotation
             if (flipHorizontal) {
-                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "p1.png", CELL_SIZE, CELL_SIZE, 180.0);
+                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "resources/p1.png", CELL_SIZE, CELL_SIZE, 180.0);
             } else {
-                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "p1.png", CELL_SIZE, CELL_SIZE, pacRotation);
+                StdDraw.picture(pacScreenX + 0.5, pacScreenY + 0.5, "resources/p1.png", CELL_SIZE, CELL_SIZE, pacRotation);
             }
         } catch (Exception e) {
             // Fallback: draw Pacman as yellow circle with mouth
@@ -500,7 +500,7 @@ public class Game implements PacmanGame {
         
         // Draw ghosts
         List<GhostImpl> ghosts = gameState.getGhosts();
-        String[] ghostImages = {"g0.png", "g1.png", "g2.png", "g3.png"};
+        String[] ghostImages = {"resources/g0.png", "resources/g1.png", "resources/g2.png", "resources/g3.png"};
         Color[] ghostColors = {Color.RED, Color.PINK, Color.CYAN, Color.ORANGE}; // Classic ghost colors
         
         for (int i = 0; i < ghosts.size() && i < 4; i++) {

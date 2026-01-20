@@ -1,3 +1,4 @@
+import client.Index2D;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

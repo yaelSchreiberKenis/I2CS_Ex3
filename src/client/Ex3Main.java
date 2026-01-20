@@ -1,3 +1,5 @@
+package client;
+
 import server.Game;
 import server.PacManAlgo;
 import server.PacmanGame;

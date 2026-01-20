@@ -1,3 +1,7 @@
+import client.Map;
+import client.Map2D;
+import client.Index2D;
+import client.Pixel2D;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
