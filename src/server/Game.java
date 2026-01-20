@@ -28,10 +28,12 @@ public class Game implements PacmanGame {
     }
     private GameState gameState;
     private Random random;
+    private AudioManager audioManager; // Audio system for music and sound effects
     private int lastPacmanDirection = RIGHT; // Track last direction for Pacman rotation
     private int dt; // Delay time between moves in milliseconds
     private int moveCount = 0; // Track number of moves (for delaying ghost movement)
     private int scenario = 0; // Scenario (0-4) for smart ghost movement probability
+    private boolean gameEndSoundPlayed = false; // Track if end sound was played
     private static final int DOT_SCORE = 10;
     private static final int POWER_PELLET_SCORE = 50;
     private static final int GHOST_SCORE = 200;
@@ -40,7 +42,9 @@ public class Game implements PacmanGame {
     private static final int GHOST_START_X = 11; // Ghost starting X position
     private static final int GHOST_START_Y = 11; // Ghost starting Y position
 
-    public Game() {}
+    public Game() {
+        this.audioManager = new AudioManager();
+    }
 
     public void init(int scenario, String id, boolean cyclic, long seed, 
                      double resolution, int dt, int unused) {
@@ -49,6 +53,7 @@ public class Game implements PacmanGame {
         this.dt = dt;
         this.moveCount = 0; // Reset move counter
         this.scenario = Math.max(0, Math.min(4, scenario)); // Store scenario (0-4)
+        this.gameEndSoundPlayed = false;
         initializeGame();
         initializeGUI();
         // Start in PAUSED state - wait for space key to start
@@ -163,9 +168,11 @@ public class Game implements PacmanGame {
             if (cell == GameState.DOT) {
                 gameState.setCell(newX, newY, GameState.EMPTY);
                 gameState.addScore(DOT_SCORE);
+                audioManager.playDotEaten();
             } else if (cell == GameState.POWER_PELLET) {
                 gameState.setCell(newX, newY, GameState.EMPTY);
                 gameState.addScore(POWER_PELLET_SCORE);
+                audioManager.playPowerPellet();
                 // Make all ghosts vulnerable for 100 moves
                 for (GhostImpl ghost : gameState.getGhosts()) {
                     ghost.setVulnerableTime(100);
@@ -196,9 +203,15 @@ public class Game implements PacmanGame {
                     // Eat ghost - move it back to starting position
                     ghost.setPosition(GHOST_START_X, GHOST_START_Y);
                     gameState.addScore(GHOST_SCORE);
+                    // Play ghost eaten sound effect
+                    audioManager.playGhostEaten();
                 } else {
                     // Collision with non-vulnerable ghost - game over
                     gameState.setStatus(PacmanGame.DONE);
+                    if (!gameEndSoundPlayed) {
+                        audioManager.playGameOver();
+                        gameEndSoundPlayed = true;
+                    }
                 }
             }
         }
@@ -207,13 +220,16 @@ public class Game implements PacmanGame {
     private void updateGame() {
         // Update shared ghost vulnerable time (synchronized for all ghosts) - move-based (1.0 per move)
         gameState.decreaseSharedVulnerableTime(); // Decrement by 1 move per update
-        
-        // Simple ghost AI - move randomly
+
         moveGhosts();
         
         // Check win condition
         if (allDotsEaten()) {
             gameState.setStatus(PacmanGame.DONE);
+            if (!gameEndSoundPlayed) {
+                audioManager.playWin();
+                gameEndSoundPlayed = true;
+            }
         }
     }
     
@@ -230,8 +246,8 @@ public class Game implements PacmanGame {
         GameMap map = createGameMap();
         
         // Smart movement probability based on scenario level (0-4)
-        // Level 0: 5%, Level 1: 10%, Level 2: 15%, Level 3: 20%, Level 4: 25%
-        double smartProbability = 0.05 + (scenario * 0.05);
+        // Level 0: 5%, Level 1: 15%, Level 2: 25%, Level 3: 35%, Level 4: 45%
+        double smartProbability = 0.05 + (scenario * 0.1);
         
         List<GhostImpl> ghosts = gameState.getGhosts();
         for (GhostImpl ghost : ghosts) {
@@ -331,8 +347,8 @@ public class Game implements PacmanGame {
     }
     
     // GUI and rendering
-    private static final double TOP_SPACE = 3.0; // Space at top for score/messages
-    private static final double MARGIN = 2.0; // Margin around the map
+    private static final double TOP_SPACE = 2.8; // Space at top for score/messages
+    private static final double MARGIN = 1.5; // Margin around the map
     private static final double CELL_SIZE = 0.95; // Size of Pacman and normal ghosts (nearly full cell)
     private static final double VULNERABLE_GHOST_SIZE = 0.55; // Smaller size for vulnerable ghosts
     
@@ -341,16 +357,16 @@ public class Game implements PacmanGame {
         int width = gameState.getWidth();
         int height = gameState.getHeight();
         
-        // Set canvas size - smaller to fit screen better
-        StdDraw.setCanvasSize(700, 700);
+        // Set canvas size
+        StdDraw.setCanvasSize(720, 720);
         
         // Set coordinate system with margins around the map
         // Map area: transposed, so width becomes height and height becomes width
         int displayWidth = height; // Transposed: original height becomes display width
         int displayHeight = width; // Transposed: original width becomes display height
         
-        // Extended scale range to make game smaller and show all sides
-        double extraPadding = 1.5; // Additional padding to shrink the game
+        // Balanced scale to show full game
+        double extraPadding = 0.8;
         StdDraw.setXscale(-MARGIN - extraPadding, displayWidth + 2*MARGIN + extraPadding);
         StdDraw.setYscale(-MARGIN - extraPadding, displayHeight + TOP_SPACE + MARGIN + extraPadding);
         
@@ -364,48 +380,80 @@ public class Game implements PacmanGame {
     private void render() {
         if (gameState == null) return;
         
-        // Clear screen with black background
-        StdDraw.clear(Color.BLACK);
-        
         int width = gameState.getWidth();
         int height = gameState.getHeight();
+        int displayWidth = height;
+        int displayHeight = width;
+        
+        // Clear with gradient-like dark background
+        StdDraw.clear(new Color(10, 10, 30));
+        
+        // Draw decorative border around the game area
+        double borderX = MARGIN - 0.3;
+        double borderY = MARGIN - 0.3;
+        double borderW = displayWidth + 0.6;
+        double borderH = displayHeight + 0.6;
+        
+        // Outer glow
+        StdDraw.setPenColor(new Color(0, 100, 200, 80));
+        StdDraw.setPenRadius(0.015);
+        StdDraw.rectangle(borderX + borderW/2, borderY + borderH/2, borderW/2 + 0.2, borderH/2 + 0.2);
+        
+        // Main border
+        StdDraw.setPenColor(new Color(0, 150, 255));
+        StdDraw.setPenRadius(0.008);
+        StdDraw.rectangle(borderX + borderW/2, borderY + borderH/2, borderW/2, borderH/2);
+        StdDraw.setPenRadius();
         
         // Draw board transposed (swap x and y for display)
-        // board[x][y] is displayed at position (y, x)
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int cell = gameState.getCell(x, y);
                 
-                // Transpose: display board[x][y] at screen position (y, x)
-                // Space at top: board is at bottom, space is at top (above the board)
-                double screenX = y + MARGIN; // Transposed: original y becomes screen x
-                double screenY = x + MARGIN; // Transposed: original x becomes screen y (board at bottom)
+                double screenX = y + MARGIN;
+                double screenY = x + MARGIN;
                 
-                // Draw cell content
                 if (cell == GameState.WALL) {
-                    // Draw blue filled square with darker border for depth
-                    StdDraw.setPenColor(new Color(0, 0, 139)); // Dark blue fill
-                    StdDraw.filledSquare(screenX + 0.5, screenY + 0.5, 0.45);
-                    StdDraw.setPenColor(new Color(30, 144, 255)); // Lighter blue border
-                    StdDraw.setPenRadius(0.003);
-                    StdDraw.square(screenX + 0.5, screenY + 0.5, 0.45);
+                    // 3D-style wall with gradient effect
+                    StdDraw.setPenColor(new Color(25, 25, 112)); // Midnight blue base
+                    StdDraw.filledSquare(screenX + 0.5, screenY + 0.5, 0.48);
+                    
+                    // Inner highlight (top-left)
+                    StdDraw.setPenColor(new Color(65, 105, 225)); // Royal blue
+                    StdDraw.filledSquare(screenX + 0.48, screenY + 0.52, 0.35);
+                    
+                    // Core
+                    StdDraw.setPenColor(new Color(30, 30, 100));
+                    StdDraw.filledSquare(screenX + 0.5, screenY + 0.5, 0.30);
+                    
+                    // Neon edge
+                    StdDraw.setPenColor(new Color(100, 149, 237)); // Cornflower blue
+                    StdDraw.setPenRadius(0.002);
+                    StdDraw.square(screenX + 0.5, screenY + 0.5, 0.47);
                     StdDraw.setPenRadius();
+                    
                 } else if (cell == GameState.DOT) {
-                    // Draw small glowing dot
-                    StdDraw.setPenColor(new Color(255, 200, 200)); // Light pink glow
-                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.12);
+                    // Sparkling dot with soft glow
+                    StdDraw.setPenColor(new Color(255, 182, 193, 60)); // Soft pink glow
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.18);
+                    StdDraw.setPenColor(new Color(255, 218, 185)); // Peach
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.10);
                     StdDraw.setPenColor(Color.WHITE);
-                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.08);
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.05);
+                    
                 } else if (cell == GameState.POWER_PELLET) {
-                    // Draw pulsing power pellet (larger, with glow effect)
-                    StdDraw.setPenColor(new Color(144, 238, 144)); // Light green glow
-                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.38);
-                    StdDraw.setPenColor(Color.GREEN);
-                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.30);
-                    StdDraw.setPenColor(new Color(200, 255, 200)); // Bright center
-                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.15);
+                    // Glowing power pellet with pulsing effect
+                    StdDraw.setPenColor(new Color(50, 255, 50, 40)); // Outer glow
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.42);
+                    StdDraw.setPenColor(new Color(0, 255, 100, 80)); // Mid glow
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.35);
+                    StdDraw.setPenColor(new Color(50, 255, 50)); // Main green
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.28);
+                    StdDraw.setPenColor(new Color(150, 255, 150)); // Inner bright
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.18);
+                    StdDraw.setPenColor(new Color(220, 255, 220)); // Center sparkle
+                    StdDraw.filledCircle(screenX + 0.5, screenY + 0.5, 0.08);
                 }
-                // EMPTY cells: just black background
             }
         }
         
@@ -492,28 +540,41 @@ public class Game implements PacmanGame {
             }
         }
         
-        // Draw score at top
-        int displayWidth = height;
-        int displayHeight = width;
+        // Draw score display with decorative styling
         double centerX = displayWidth / 2.0 + MARGIN;
-        double topY = displayHeight + MARGIN + TOP_SPACE * 0.7;
+        double topY = displayHeight + MARGIN + TOP_SPACE * 0.65;
         
-        StdDraw.setPenColor(Color.WHITE);
-        StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 18));
-        StdDraw.text(centerX, topY, "Score: " + gameState.getScore());
+        // Score background panel
+        StdDraw.setPenColor(new Color(20, 20, 60));
+        StdDraw.filledRectangle(centerX, topY, 4.5, 0.6);
+        StdDraw.setPenColor(new Color(100, 149, 237));
+        StdDraw.setPenRadius(0.003);
+        StdDraw.rectangle(centerX, topY, 4.5, 0.6);
+        StdDraw.setPenRadius();
         
-        // Draw win/lose message above the table if game is done
+        // Score text with glow effect
+        StdDraw.setPenColor(new Color(255, 215, 0)); // Gold
+        StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 16));
+        StdDraw.text(centerX, topY, "SCORE: " + gameState.getScore());
+        
+        // Draw win/lose message if game is done
         if (gameState.getStatus() == PacmanGame.DONE) {
-            double msgY = displayHeight + MARGIN + TOP_SPACE * 0.3;
-            
-            StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 28));
+            double msgY = displayHeight + MARGIN + TOP_SPACE * 0.25;
             
             if (allDotsEaten()) {
-                StdDraw.setPenColor(Color.GREEN);
-                StdDraw.text(centerX, msgY, "PACMAN WINS! :)");
+                // Victory message with celebration effect
+                StdDraw.setPenColor(new Color(50, 255, 50, 60));
+                StdDraw.filledRectangle(centerX, msgY, 5.5, 0.8);
+                StdDraw.setPenColor(new Color(0, 255, 100));
+                StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 22));
+                StdDraw.text(centerX, msgY, "PACMAN WINS!");
             } else {
-                StdDraw.setPenColor(Color.RED);
-                StdDraw.text(centerX, msgY, "GAME OVER :(");
+                // Game over message
+                StdDraw.setPenColor(new Color(255, 50, 50, 60));
+                StdDraw.filledRectangle(centerX, msgY, 5.0, 0.8);
+                StdDraw.setPenColor(new Color(255, 80, 80));
+                StdDraw.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 22));
+                StdDraw.text(centerX, msgY, "GAME OVER");
             }
         }
         
