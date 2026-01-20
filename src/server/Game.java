@@ -170,7 +170,7 @@ public class Game implements PacmanGame {
                 gameState.addScore(POWER_PELLET_SCORE);
                 // Make all ghosts vulnerable for 50 moves
                 for (GhostImpl ghost : gameState.getGhosts()) {
-                    ghost.setVulnerableTime(50.0); // 50 moves
+                    ghost.setVulnerableTime(130.0); // 50 moves
                 }
             }
         }
