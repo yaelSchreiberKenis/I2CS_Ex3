@@ -1,3 +1,5 @@
+package client;
+
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -161,12 +163,12 @@ public class Map implements Map2D {
 				ArrayList<Pixel2D> path = new ArrayList<>();
 				while (current.parent != null) {
 					// Add current node to the front of the path
-					path.addFirst(current.current);
+					path.add(0, current.current);
 					// Move to parent node
 					current = current.parent;
 				}
 				// Add the starting node (which has null parent)
-				path.addFirst(current.current);
+				path.add(0, current.current);
 				// Convert ArrayList to array and return
 				ans = path.toArray(new Pixel2D[0]);
 				return ans;
