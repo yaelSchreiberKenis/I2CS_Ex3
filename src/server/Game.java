@@ -3,8 +3,6 @@ package server;
 import java.awt.Color;
 import java.util.List;
 import java.util.Random;
-import java.util.LinkedList;
-import java.util.Queue;
 
 /**
  * Main game server implementation
@@ -228,23 +226,28 @@ public class Game implements PacmanGame {
         int pacX = gameState.getPacmanX();
         int pacY = gameState.getPacmanY();
         
+        // Create GameMap for pathfinding
+        GameMap map = createGameMap();
+        
         // Smart movement probability based on scenario level (0-4)
         // Level 0: 5%, Level 1: 10%, Level 2: 15%, Level 3: 20%, Level 4: 25%
         double smartProbability = 0.05 + (scenario * 0.05);
         
         List<GhostImpl> ghosts = gameState.getGhosts();
-        for (int i = 0; i < ghosts.size(); i++) {
-            GhostImpl ghost = ghosts.get(i);
+        for (GhostImpl ghost : ghosts) {
             int ghostX = ghost.getX();
             int ghostY = ghost.getY();
             
             // All ghosts can be smart, but with probability based on level
-            if (random.nextDouble() < smartProbability) {
-                // Smart move: use BFS to find direction towards Pacman
-                int[] nextMove = findNextStepTowardsPacman(ghostX, ghostY, pacX, pacY);
-                if (nextMove != null) {
-                    int newX = nextMove[0];
-                    int newY = nextMove[1];
+            if (random.nextDouble() < smartProbability && map != null) {
+                // Smart move: use GameMap to find shortest path to Pacman
+                Pixel2D ghostPos = new Index2D(ghostX, ghostY);
+                Pixel2D pacmanPos = new Index2D(pacX, pacY);
+                Pixel2D[] path = map.shortestPath(ghostPos, pacmanPos, GameState.WALL);
+                
+                if (path != null && path.length > 1) {
+                    int newX = path[1].getX();
+                    int newY = path[1].getY();
                     if (gameState.isValidPosition(newX, newY) && 
                         gameState.getCell(newX, newY) != GameState.WALL) {
                         ghost.setPosition(newX, newY);
@@ -276,62 +279,22 @@ public class Game implements PacmanGame {
     }
     
     /**
-     * Simple BFS to find next step towards Pacman (game-specific pathfinding).
-     * Returns [newX, newY] or null if no path found.
+     * Creates a GameMap from the current game board for pathfinding.
      */
-    private int[] findNextStepTowardsPacman(int fromX, int fromY, int toX, int toY) {
-        if (fromX == toX && fromY == toY) return null;
-        
-        int width = gameState.getWidth();
-        int height = gameState.getHeight();
-        boolean[][] visited = new boolean[width][height];
-        int[][] parentX = new int[width][height];
-        int[][] parentY = new int[width][height];
-        
-        Queue<int[]> queue = new LinkedList<>();
-        queue.offer(new int[]{fromX, fromY});
-        visited[fromX][fromY] = true;
-        parentX[fromX][fromY] = -1;
-        parentY[fromX][fromY] = -1;
-        
-        int[][] dirs = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
-        
-        while (!queue.isEmpty()) {
-            int[] curr = queue.poll();
-            int cx = curr[0], cy = curr[1];
-            
-            if (cx == toX && cy == toY) {
-                // Backtrack to find first step
-                int pathX = cx, pathY = cy;
-                while (parentX[pathX][pathY] != fromX || parentY[pathX][pathY] != fromY) {
-                    int px = parentX[pathX][pathY];
-                    int py = parentY[pathX][pathY];
-                    if (px == -1) break;
-                    pathX = px;
-                    pathY = py;
-                }
-                return new int[]{pathX, pathY};
-            }
-            
-            for (int[] d : dirs) {
-                int nx = gameState.wrapX(cx + d[0]);
-                int ny = gameState.wrapY(cy + d[1]);
-                
-                // Check bounds BEFORE accessing arrays to prevent overflow in non-cyclic mode
-                if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-                    continue;
-                }
-                
-                if (!visited[nx][ny] && gameState.isValidPosition(nx, ny) && 
-                    gameState.getCell(nx, ny) != GameState.WALL) {
-                    visited[nx][ny] = true;
-                    parentX[nx][ny] = cx;
-                    parentY[nx][ny] = cy;
-                    queue.offer(new int[]{nx, ny});
-                }
+    private GameMap createGameMap() {
+        int[][] board = gameState.getBoard();
+        // Transpose board for GameMap: board[x][y] -> transposed[y][x]
+        int width = board.length;
+        int height = board[0].length;
+        int[][] transposed = new int[height][width];
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                transposed[y][x] = board[x][y];
             }
         }
-        return null;
+        GameMap map = new GameMap(transposed);
+        map.setCyclic(gameState.isCyclicMode());
+        return map;
     }
     
     
@@ -369,7 +332,7 @@ public class Game implements PacmanGame {
     
     // GUI and rendering
     private static final double TOP_SPACE = 3.0; // Space at top for score/messages
-    private static final double MARGIN = 1.5; // Margin around the map
+    private static final double MARGIN = 2.0; // Margin around the map
     private static final double CELL_SIZE = 0.95; // Size of Pacman and normal ghosts (nearly full cell)
     private static final double VULNERABLE_GHOST_SIZE = 0.55; // Smaller size for vulnerable ghosts
     
@@ -378,18 +341,18 @@ public class Game implements PacmanGame {
         int width = gameState.getWidth();
         int height = gameState.getHeight();
         
-        // Set canvas size
-        StdDraw.setCanvasSize(800, 800);
+        // Set canvas size - smaller to fit screen better
+        StdDraw.setCanvasSize(700, 700);
         
         // Set coordinate system with margins around the map
         // Map area: transposed, so width becomes height and height becomes width
         int displayWidth = height; // Transposed: original height becomes display width
         int displayHeight = width; // Transposed: original width becomes display height
         
-        // Adjusted: add more bottom margin to push game up in the UI
-        double bottomMargin = MARGIN + 2.5;
-        StdDraw.setXscale(-MARGIN, displayWidth + 2*MARGIN);
-        StdDraw.setYscale(-bottomMargin, displayHeight + TOP_SPACE + MARGIN);
+        // Extended scale range to make game smaller and show all sides
+        double extraPadding = 1.5; // Additional padding to shrink the game
+        StdDraw.setXscale(-MARGIN - extraPadding, displayWidth + 2*MARGIN + extraPadding);
+        StdDraw.setYscale(-MARGIN - extraPadding, displayHeight + TOP_SPACE + MARGIN + extraPadding);
         
         // Enable double buffering for smooth animation
         StdDraw.enableDoubleBuffering();

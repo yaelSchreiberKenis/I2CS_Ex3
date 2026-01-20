@@ -1,10 +1,9 @@
 package server;
 
 /**
- * Implementation of GhostInterface
  * Represents a ghost entity in the Pacman game
  */
-public class GhostImpl implements GhostInterface, GhostCL {
+public class GhostImpl implements GhostCL {
     private int x;
     private int y;
     private GameState gameState; // Reference to game state for shared vulnerability timer

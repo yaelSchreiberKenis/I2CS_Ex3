@@ -3,6 +3,7 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 import server.GameState;
 import server.GhostImpl;
+import server.GhostCL;
 
 /**
  * JUnit tests for GhostImpl class

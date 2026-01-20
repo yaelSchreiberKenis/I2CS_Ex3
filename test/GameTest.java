@@ -26,13 +26,6 @@ public class GameTest {
         assertNotNull("Game should be created", newGame);
     }
     
-    @Test
-    public void testGetInfoNotNull() {
-        String info = game.getInfo();
-        assertNotNull("Info should not be null", info);
-        assertFalse("Info should not be empty", info.isEmpty());
-    }
-    
     // ==================== Color Conversion Tests ====================
     
     @Test

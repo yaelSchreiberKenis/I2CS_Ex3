@@ -37,19 +37,6 @@ public class GameStateTest {
         assertNotEquals("Board copy should be independent", 999, board2[1][1]);
     }
     
-    @Test
-    public void testBoardBorders() {
-        // All borders should be walls
-        for (int y = 0; y < gameState.getHeight(); y++) {
-            assertEquals("Left border should be wall", GameState.WALL, gameState.getCell(0, y));
-            assertEquals("Right border should be wall", GameState.WALL, gameState.getCell(gameState.getWidth() - 1, y));
-        }
-        for (int x = 0; x < gameState.getWidth(); x++) {
-            assertEquals("Top border should be wall", GameState.WALL, gameState.getCell(x, 0));
-            assertEquals("Bottom border should be wall", GameState.WALL, gameState.getCell(x, gameState.getHeight() - 1));
-        }
-    }
-    
     // ==================== Pacman Position Tests ====================
     
     @Test

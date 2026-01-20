@@ -5,7 +5,7 @@ import server.PacManAlgo;
  */
 public class GameInfo {
 	public static final String MY_ID = "1234";
-	public static final int CASE_SCENARIO = 4; // [0,4]
+	public static final int CASE_SCENARIO = 0; // [0,4]
 	public static final long RANDOM_SEED = 31; // Random seed
 	public static final boolean CYCLIC_MODE = true;
 	public static final int DT = 20; // [20,200]
